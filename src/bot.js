@@ -88,9 +88,9 @@ async function showProfile(ctx) {
     profileText += `• <b>Статус доступа:</b> ✅ Активен\n`;
     profileText += `• <b>Тариф:</b> ${activeSub.plan_name}\n`;
     profileText += `• <b>Действует до (МСК):</b> <code>${expiryDate}</code>\n\n`;
-    profileText += `📥 Ваш персональный токен доступа к ИТ-платформе готов. Нажмите на кнопку ниже, чтобы получить его.`;
+    profileText += `📥 Ваш персональный ключ доступа к ИТ-платформе готов. Нажмите на кнопку ниже, чтобы получить его.`;
 
-    inlineButtons.push([Markup.button.callback('🔑 Получить токен доступа', 'get_key')]);
+    inlineButtons.push([Markup.button.callback('🔑 Получить ключ доступа', 'get_key')]);
     inlineButtons.push([Markup.button.callback('🔄 Продлить доступ', 'buy_menu')]);
   } else {
     profileText += `• <b>Статус доступа:</b> ❌ Неактивен\n\n`;
@@ -123,23 +123,51 @@ bot.action('get_key', async (ctx) => {
   await ctx.answerCbQuery();
   
   const keyText = `
-🔑 <b>Ваш персональный токен доступа к ИТ-платформе:</b>
-<code>${activeSub.connection_url}</code>
-
-🌐 <b>Ссылка для подписки (Hiddify/Shadowrocket):</b>
+🔑 <b>Ваш персональный ключ доступа к ИТ-платформе Knight Space (подписка):</b>
 <code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
 
-<i>Нажмите на токен или ссылку выше, чтобы скопировать.</i>
+<i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
 
-⚙️ <b>Инструкция по авторизации:</b>
-1. Установите клиент авторизации (раздел «Инструкция по авторизации» в меню)
-2. Скопируйте персональный токен ИЛИ ссылку для подписки выше
-3. Откройте приложение авторизации и импортируйте токен или вставьте ссылку для подписки
-4. Активируйте соединение и перейдите к просмотру материалов!
+⚙️ <b>Быстрая настройка через Hiddify (рекомендуется):</b>
+1. Установите приложение <b>Hiddify</b> (ссылки для скачивания в разделе «⚙️ Инструкция по авторизации»)
+2. Скопируйте вашу ссылку подписки выше
+3. Откройте приложение, нажмите <b>«Новый профиль»</b> (или ➕ в правом верхнем углу)
+4. Выберите <b>«Добавить из буфера обмена»</b>
+5. Нажмите большую кнопку подключения в центре экрана
+
+<i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>
+  `;
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
+  ]);
+
+  await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
+});
+
+// Callback for getting static VLESS key
+bot.action('get_static_key', async (ctx) => {
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+
+  if (!activeSub) {
+    return ctx.answerCbQuery('У вас нет активного доступа!', { show_alert: true });
+  }
+
+  await ctx.answerCbQuery();
+
+  const keyText = `
+🔑 <b>Ваш статический ключ доступа (VLESS):</b>
+<code>${activeSub.connection_url}</code>
+
+<i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>
+
+⚠️ <i>Используйте этот статический ключ только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок. Для автоматического обновления конфигурации и удобного просмотра срока действия подписки рекомендуем использовать приложение Hiddify со ссылкой для подписки.</i>
   `;
 
   await ctx.reply(keyText, { parse_mode: 'HTML' });
 });
+
 
 // Callback for activating trial
 bot.action('activate_trial', async (ctx) => {
@@ -151,14 +179,14 @@ bot.action('activate_trial', async (ctx) => {
   }
 
   await ctx.answerCbQuery('Активируем тест...');
-  await ctx.reply('⏳ Секунду, генерируем персональный токен...');
+  await ctx.reply('⏳ Секунду, генерируем персональный ключ доступа...');
 
   try {
     const email = `vpn_user_${tgId}`;
     // Add client to 3x-ui
     const client = await xuiApi.addClient(email);
 
-    if (client.error && !config.MOCK_XUI) {
+    if (client.error && !xuiApi.mockMode) {
       throw new Error(client.error);
     }
 
@@ -175,21 +203,22 @@ bot.action('activate_trial', async (ctx) => {
     // Mark trial as used
     await db.markTrialUsed(tgId);
 
-    await ctx.reply(`
+    const keyText = `
 🎉 <b>Пробный доступ успешно активирован!</b>
 
 Доступ к ИТ-платформе предоставлен на 3 дня.
-Ваш персональный токен авторизации:
-<code>${client.connectionUrl}</code>
-
-🌐 <b>Ссылка для подписки (Hiddify/Shadowrocket):</b>
+🔑 <b>Ваш персональный ключ доступа (подписка):</b>
 <code>${config.SUB_SERVER_URL}/sub/${client.uuid}</code>
 
-<i>Нажмите на токен или ссылку выше, чтобы скопировать. Инструкцию по настройке авторизации вы найдете в меню.</i>
-    `, { parse_mode: 'HTML' });
+<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
+    `;
+    const keyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
+    ]);
+    await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
   } catch (error) {
     console.error('Trial activation error:', error);
-    await ctx.reply('❌ Произошла ошибка при создании токена. Пожалуйста, обратитесь в поддержку.');
+    await ctx.reply('❌ Произошла ошибка при создании ключа доступа. Пожалуйста, обратитесь в поддержку.');
   }
 });
 
@@ -342,7 +371,7 @@ bot.on('successful_payment', async (ctx) => {
 Ваш доступ к материалам продлен на <b>${plan.days} дней</b>.
 Новая дата окончания (МСК): <code>${new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU')}</code>
 
-Ваш персональный токен доступа остается прежним!
+Ваш персональный ключ доступа остается прежним!
       `, { parse_mode: 'HTML' });
     } else {
       // Create a brand new subscription (or reuse details if they have an expired one)
@@ -359,7 +388,7 @@ bot.on('successful_payment', async (ctx) => {
       // Add to 3x-ui
       const client = await xuiApi.addClient(email, uuid);
       
-      if (client.error && !config.MOCK_XUI) {
+      if (client.error && !xuiApi.mockMode) {
         console.error('3x-ui API Error during payment registration:', client.error);
       }
 
@@ -373,20 +402,21 @@ bot.on('successful_payment', async (ctx) => {
         plan.days
       );
 
-      await ctx.reply(`
-🎉 <b>Оплата успешно получена! Доступ к ИТ-платформе активирован!</b>
+      const keyText = `
+🎉 <b>Оплата успешно получена! Доступ к ИТ-платформе Knight Space активирован!</b>
 
 Спасибо за покупку! Доступ предоставлен на <b>${plan.days} дней</b>.
 Действует до (МСК): <code>${new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU')}</code>
 
-🔑 <b>Ваш токен авторизации:</b>
-<code>${client.connectionUrl}</code>
-
-🌐 <b>Ссылка для подписки (Hiddify/Shadowrocket):</b>
+🔑 <b>Ваш персональный ключ доступа (подписка):</b>
 <code>${config.SUB_SERVER_URL}/sub/${client.uuid}</code>
 
-<i>Нажмите на токен или ссылку выше, чтобы скопировать. Подробные инструкции по настройке авторизации находятся в разделе «Инструкция по авторизации».</i>
-      `, { parse_mode: 'HTML' });
+<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
+      `;
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
+      ]);
+      await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
     }
   } catch (error) {
     console.error('Successful payment processing error:', error);
@@ -424,51 +454,56 @@ const showInstruction = (os) => async (ctx) => {
     text = `
 🍏 <b>Инструкция для iOS (iPhone, iPad):</b>
 
-1️⃣ Установите авторизационное приложение (рекомендуется <b>FoXray</b> или <b>Streisand</b>) из App Store.
-2️⃣ Скопируйте ваш персональный токен доступа из бота (раздел 👤 <b>Мой профиль</b> -> 🔑 <b>Получить токен доступа</b>).
-3️⃣ Откройте установленное приложение:
-   • Нажмите кнопку "+" вверху экрана.
-   • Выберите пункт <b>"Import from Clipboard"</b> (Импорт из буфера обмена).
-4️⃣ Разрешите добавление авторизационной конфигурации безопасности в систему.
-5️⃣ Выберите добавленный профиль Knight Space и нажмите кнопку активации (кнопка "Play" или тумблер).
+1️⃣ Установите приложение <b>Hiddify</b>:
+   👉 <a href="https://apps.apple.com/app/hiddify/id6477388749">Установить Hiddify из App Store</a>
+2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота (раздел 👤 <b>Мой профиль</b> -> 🔑 <b>Получить ключ доступа</b>).
+3️⃣ Откройте приложение Hiddify:
+   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
+   • Выберите пункт <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
+4️⃣ Нажмите большую круглую кнопку в центре экрана для активации безопасного подключения.
     `;
   } else if (os === 'android') {
     text = `
 🤖 <b>Инструкция для Android:</b>
 
-1️⃣ Установите приложение-клиент (рекомендуется <b>v2rayNG</b>) из Google Play Market.
-2️⃣ Скопируйте ваш токен доступа из бота (раздел 👤 <b>Мой профиль</b> -> 🔑 <b>Получить токен доступа</b>).
-3️⃣ Откройте приложение:
-   • Нажмите на иконку ➕ в правом верхнем углу.
-   • Выберите пункт <b>«Импортировать профиль из буфера обмена»</b>.
-4️⃣ В списке появится конфигурация Knight Space. Нажмите на неё, чтобы выбрать (левый край подсветится цветом).
-5️⃣ Нажмите на круглую кнопку активации подключения в правом нижнем углу и подтвердите запуск безопасного соединения.
+1️⃣ Установите приложение <b>Hiddify</b>:
+   👉 <a href="https://play.google.com/store/apps/details?id=app.hiddify.com">Установить Hiddify из Google Play</a>
+   👉 <a href="https://github.com/hiddify/hiddify-next/releases">Скачать APK напрямую с GitHub</a>
+2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота (раздел 👤 <b>Мой профиль</b> -> 🔑 <b>Получить ключ доступа</b>).
+3️⃣ Откройте приложение Hiddify:
+   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
+   • Выберите пункт <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
+4️⃣ Нажмите большую круглую кнопку в центре экрана и подтвердите создание VPN-подключения в системе.
     `;
   } else if (os === 'windows') {
     text = `
 💻 <b>Инструкция для Windows:</b>
 
-1️⃣ Скачайте и установите программу-клиент (рекомендуется <b>v2rayN</b> с официального сайта или GitHub).
-2️⃣ Переключите интерфейс программы на английский язык в настройках (Language) и перезапустите программу.
-3️⃣ Скопируйте ваш токен доступа из бота.
-4️⃣ В программе:
-   • Нажмите <b>"Servers"</b> в левом верхнем углу.
-   • Нажмите <b>"Import bulk URL from clipboard"</b> (Импорт из буфера).
-5️⃣ Выберите добавленный профиль и активируйте его для безопасного чтения материалов.
+1️⃣ Скачайте и установите программу <b>Hiddify</b>:
+   👉 <a href="https://github.com/hiddify/hiddify-next/releases">Скачать Hiddify для Windows с GitHub</a>
+   <i>(Рекомендуется скачать файл с расширением .setup.exe)</i>
+2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота.
+3️⃣ Откройте Hiddify:
+   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
+   • Нажмите кнопку <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
+4️⃣ Нажмите большую круглую кнопку подключения в центре программы.
     `;
   } else if (os === 'macos') {
     text = `
 🍎 <b>Инструкция для macOS:</b>
 
-1️⃣ Установите программу-клиент (рекомендуется <b>V2Box</b> или <b>FoXray</b>) из Mac App Store.
-2️⃣ Скопируйте ваш персональный токен доступа из бота.
-3️⃣ Откройте приложение:
-   • Вкладка настроек, нажмите кнопку ➕ в правом верхнем углу, выберите <b>"Import from Clipboard"</b> (Импорт из буфера обмена).
-4️⃣ Выберите добавленный профиль Knight Space и активируйте безопасную авторизацию.
+1️⃣ Установите программу <b>Hiddify</b>:
+   👉 <a href="https://apps.apple.com/app/hiddify/id6477388749">Установить Hiddify из App Store</a>
+   👉 <a href="https://github.com/hiddify/hiddify-next/releases">Скачать для macOS с GitHub</a>
+2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота.
+3️⃣ Откройте Hiddify:
+   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
+   • Выберите <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
+4️⃣ Нажмите большую круглую кнопку подключения в центре.
     `;
   }
 
-  await ctx.reply(text, { parse_mode: 'HTML' });
+  await ctx.reply(text, { parse_mode: 'HTML', disable_web_page_preview: true });
 };
 
 bot.action('inst_ios', showInstruction('ios'));
@@ -573,13 +608,20 @@ bot.command('give', async (ctx) => {
 
     // Notify user
     try {
-      await bot.telegram.sendMessage(targetId, `
-🎁 <b>Администратор предоставил вам доступ к ИТ-платформе на ${days} дней!</b>
+      const userKeyText = `
+🎁 <b>Администратор предоставил вам доступ к ИТ-платформе Knight Space на ${days} дней!</b>
 
 Новая дата окончания (МСК): <code>${expiryDate}</code>
-Ваш токен авторизации:
-<code>${updatedSub.connection_url}</code>
-      `, { parse_mode: 'HTML' });
+
+🔑 <b>Ваш персональный ключ доступа (подписка):</b>
+<code>${config.SUB_SERVER_URL}/sub/${updatedSub.client_uuid}</code>
+
+<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
+      `;
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
+      ]);
+      await bot.telegram.sendMessage(targetId, userKeyText, { parse_mode: 'HTML', ...keyboard });
     } catch (err) {
       console.warn(`Could not notify user ${targetId} via PM:`, err.message);
     }

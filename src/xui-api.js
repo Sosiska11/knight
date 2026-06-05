@@ -4,17 +4,18 @@ import config from './config.js';
 
 class XuiClient {
   constructor() {
-    this.baseUrl = config.XUI_URL;
+    this.baseUrl = config.XUI_URL ? config.XUI_URL.replace(/\/+$/, '') : '';
     this.username = config.XUI_USERNAME;
     this.password = config.XUI_PASSWORD;
     this.mockMode = config.MOCK_XUI;
     this.cookie = null;
+    this.csrfToken = null;
     this.sessionExpiry = null;
   }
 
   // Helper to check if session is still valid
   isLoggedIn() {
-    return this.cookie && this.sessionExpiry && Date.now() < this.sessionExpiry;
+    return this.cookie && this.csrfToken && this.sessionExpiry && Date.now() < this.sessionExpiry;
   }
 
   // Authenticate with 3x-ui panel
@@ -22,44 +23,82 @@ class XuiClient {
     if (this.mockMode) return true;
 
     try {
-      const loginUrl = `${this.baseUrl}/login`;
-      const params = new URLSearchParams();
-      params.append('username', this.username);
-      params.append('password', this.password);
-
-      console.log(`🔑 Attempting login to 3x-ui panel: ${loginUrl}`);
-      const response = await axios.post(loginUrl, params, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        timeout: 10000,
-        validateStatus: false,
+      console.log(`🔑 Attempting login to 3x-ui panel: ${this.baseUrl}`);
+      
+      // 1. GET request to the root page to obtain initial session cookie and CSRF token
+      const getResponse = await axios.get(`${this.baseUrl}/`, {
+        timeout: 5000,
+        validateStatus: () => true
       });
 
+      if (getResponse.status !== 200) {
+        throw new Error(`Failed to load panel root page. Status: ${getResponse.status}`);
+      }
+
+      // Extract cookie
+      const getCookies = getResponse.headers['set-cookie'];
+      if (getCookies && getCookies.length > 0) {
+        this.cookie = getCookies.map(c => c.split(';')[0]).join('; ');
+      }
+
+      // Extract CSRF token from meta tags
+      const csrfMatch = getResponse.data.match(/meta name="csrf-token" content="([^"]+)"/);
+      this.csrfToken = csrfMatch ? csrfMatch[1] : null;
+
+      if (!this.csrfToken) {
+        console.warn('⚠️ CSRF token meta tag not found in login page HTML.');
+      }
+
+      // 2. POST request to login (JSON format) with Cookie and CSRF token
+      const loginUrl = `${this.baseUrl}/login`;
+      const response = await axios.post(
+        loginUrl,
+        { username: this.username, password: this.password },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': this.cookie || '',
+            'X-CSRF-Token': this.csrfToken || '',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          timeout: 10000,
+          validateStatus: () => true
+        }
+      );
+
       if (response.status === 200 && response.data?.success) {
-        // Extract session cookie
+        // Extract authenticated session cookie
         const cookies = response.headers['set-cookie'];
         if (cookies && cookies.length > 0) {
-          // Store the whole cookie string
           this.cookie = cookies.map(c => c.split(';')[0]).join('; ');
-          // Sessions usually last 1 hour, let's refresh every 45 mins
           this.sessionExpiry = Date.now() + 45 * 60 * 1000;
           console.log('✅ Successfully authenticated with 3x-ui panel.');
           return true;
         }
       }
 
-      // If form-urlencoded failed, try JSON
-      const jsonResponse = await axios.post(
-        loginUrl,
-        { username: this.username, password: this.password },
-        { timeout: 10000, validateStatus: false }
-      );
+      // Try urlencoded as fallback if JSON failed
+      const params = new URLSearchParams();
+      params.append('username', this.username);
+      params.append('password', this.password);
 
-      if (jsonResponse.status === 200 && jsonResponse.data?.success) {
-        const cookies = jsonResponse.headers['set-cookie'];
+      const urlencodedResponse = await axios.post(loginUrl, params, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Cookie': this.cookie || '',
+          'X-CSRF-Token': this.csrfToken || '',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        timeout: 10000,
+        validateStatus: () => true
+      });
+
+      if (urlencodedResponse.status === 200 && urlencodedResponse.data?.success) {
+        const cookies = urlencodedResponse.headers['set-cookie'];
         if (cookies && cookies.length > 0) {
           this.cookie = cookies.map(c => c.split(';')[0]).join('; ');
           this.sessionExpiry = Date.now() + 45 * 60 * 1000;
-          console.log('✅ Successfully authenticated with 3x-ui panel (via JSON).');
+          console.log('✅ Successfully authenticated with 3x-ui panel (via urlencoded fallback).');
           return true;
         }
       }
@@ -83,6 +122,8 @@ class XuiClient {
       'Cookie': this.cookie,
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      'X-CSRF-Token': this.csrfToken || '',
+      'X-Requested-With': 'XMLHttpRequest'
     };
   }
 
@@ -92,6 +133,7 @@ class XuiClient {
 
     try {
       const headers = await this.getHeaders();
+      if (this.mockMode) return null;
       const url = `${this.baseUrl}/panel/api/inbounds/get/${inboundId}`;
       const response = await axios.get(url, { headers, timeout: 5000 });
 
@@ -119,31 +161,25 @@ class XuiClient {
 
     try {
       const headers = await this.getHeaders();
-      const clientSettings = {
-        clients: [
-          {
-            id: uuid,
-            flow: 'xtls-rprx-vision',
-            email: email,
-            limitIp: limitIp,
-            totalGB: 0,
-            expiryTime: 0,
-            enable: true,
-            tgId: '',
-            subId: '',
-          },
-        ],
+      if (this.mockMode) return this.addClient(email, uuid);
+      const clientPayload = {
+        inboundIds: [inboundId],
+        client: {
+          id: uuid,
+          flow: 'xtls-rprx-vision',
+          email: email,
+          limitIp: limitIp,
+          totalGB: 0,
+          expiryTime: 0,
+          enable: true,
+          tgId: 0,
+          subId: '',
+          comment: ''
+        }
       };
 
-      const url = `${this.baseUrl}/panel/api/inbounds/addClient`;
-      const response = await axios.post(
-        url,
-        {
-          id: inboundId,
-          settings: JSON.stringify(clientSettings),
-        },
-        { headers, timeout: 10000 }
-      );
+      const url = `${this.baseUrl}/panel/api/clients/add`;
+      const response = await axios.post(url, clientPayload, { headers, timeout: 10000 });
 
       if (!response.data || !response.data.success) {
         throw new Error(response.data?.msg || 'Unknown panel error');
@@ -164,8 +200,6 @@ class XuiClient {
 
   // Delete client from inbound
   async deleteClient(email, uuid) {
-    const inboundId = config.XUI_INBOUND_ID;
-
     if (this.mockMode) {
       console.log(`[MOCK] Deleted client: email=${email}, uuid=${uuid}`);
       return true;
@@ -173,18 +207,20 @@ class XuiClient {
 
     try {
       const headers = await this.getHeaders();
+      if (this.mockMode) return true;
       
-      // Try MHSanaei endpoint first: /panel/api/inbounds/{inboundId}/delClient/{clientUuid}
-      let url = `${this.baseUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
+      // Try MHSanaei 3.x.x endpoint first: /panel/api/clients/del/{email}
+      let url = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email)}`;
       console.log(`🗑️ Attempting to delete client ${email} using URL: ${url}`);
       
-      let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: false });
+      let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
 
-      // If it fails or returns 404/405, try the FranzKafka / alternative endpoint: /panel/api/inbounds/delClient/{clientUuid}
+      // If it fails or returns 404/405, try the older MHSanaei / FranzKafka endpoints as fallbacks
       if (response.status !== 200 || !response.data?.success) {
         console.warn(`⚠️ First delete method failed (${response.status}). Trying alternative...`);
-        url = `${this.baseUrl}/panel/api/inbounds/delClient/${uuid}`;
-        response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: false });
+        const inboundId = config.XUI_INBOUND_ID;
+        url = `${this.baseUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
+        response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
       }
 
       if (response.status === 200 && response.data?.success) {
@@ -211,7 +247,9 @@ class XuiClient {
     try {
       const port = inbound.port;
       const remark = `Knight_Space_${email}`;
-      const streamSettings = JSON.parse(inbound.streamSettings);
+      const streamSettings = typeof inbound.streamSettings === 'string'
+        ? JSON.parse(inbound.streamSettings)
+        : inbound.streamSettings;
       
       if (streamSettings.security !== 'reality') {
         // Fallback for non-reality
@@ -220,10 +258,10 @@ class XuiClient {
       }
 
       const reality = streamSettings.realitySettings;
-      const publicKey = reality.publicKey;
+      const publicKey = reality.publicKey || reality.settings?.publicKey;
       const shortId = reality.shortIds?.[0] || '';
       const sni = reality.serverNames?.[0] || 'yahoo.com';
-      const fp = reality.fingerprint || 'chrome';
+      const fp = reality.fingerprint || reality.settings?.fingerprint || 'chrome';
 
       // Parse domain from baseUrl or use IP
       let host = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
