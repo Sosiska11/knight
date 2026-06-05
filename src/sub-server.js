@@ -23,7 +23,7 @@ app.get('/sub/:uuid', async (req, res) => {
 
     // Set Headers for Hiddify, Shadowrocket, Sing-box, etc.
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Profile-Title', 'Knight VPN');
+    res.setHeader('Profile-Title', '⚔️ Knight VPN');
     res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''KnightVPN");
     
     // Shows traffic usage (1 TB total) and expiration date inside Hiddify
@@ -35,9 +35,9 @@ app.get('/sub/:uuid', async (req, res) => {
     // Dynamically override the server name/remark with a beautiful name and flag
     let connectionUrl = sub.connection_url;
     if (connectionUrl.includes('#')) {
-      connectionUrl = connectionUrl.split('#')[0] + '#⚔️ 🇳🇱 Knight VPN | Netherlands';
+      connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Knight VPN | Netherlands';
     } else {
-      connectionUrl = connectionUrl + '#⚔️ 🇳🇱 Knight VPN | Netherlands';
+      connectionUrl = connectionUrl + '#🇳🇱 Knight VPN | Netherlands';
     }
 
     // Base64 encode the connection URL (standard format for V2Ray subscriptions)

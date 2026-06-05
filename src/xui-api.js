@@ -155,7 +155,7 @@ class XuiClient {
     if (this.mockMode) {
       console.log(`[MOCK] Added client: email=${email}, uuid=${uuid}`);
       // Generate a mock Reality link
-      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#⚔️ 🇳🇱 Knight VPN | Netherlands`;
+      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Knight VPN | Netherlands`;
       return { email, uuid, connectionUrl: mockLink };
     }
 
@@ -193,7 +193,7 @@ class XuiClient {
     } catch (error) {
       console.error(`❌ Failed to add client ${email} in 3x-ui:`, error.message);
       // Generate fallback key so user gets SOMETHING and we can debug
-      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#⚔️ 🇳🇱 Knight VPN | Netherlands`;
+      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Knight VPN | Netherlands`;
       return { email, uuid, connectionUrl: mockLink, error: error.message };
     }
   }
@@ -241,12 +241,12 @@ class XuiClient {
     if (!inbound) {
       // Fallback if we can't fetch inbound settings
       const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#⚔️ 🇳🇱 Knight VPN | Netherlands`;
+      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#🇳🇱 Knight VPN | Netherlands`;
     }
 
     try {
       const port = inbound.port;
-      const remark = `⚔️ 🇳🇱 Knight VPN | Netherlands`;
+      const remark = `🇳🇱 Knight VPN | Netherlands`;
       const streamSettings = typeof inbound.streamSettings === 'string'
         ? JSON.parse(inbound.streamSettings)
         : inbound.streamSettings;
@@ -273,7 +273,7 @@ class XuiClient {
     } catch (err) {
       console.error('❌ Error parsing inbound settings to build link:', err);
       const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#⚔️ 🇳🇱 Knight VPN | Netherlands`;
+      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#🇳🇱 Knight VPN | Netherlands`;
     }
   }
 }
