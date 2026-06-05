@@ -250,7 +250,7 @@ export async function forceExtendUser(tgId, days) {
 
     const email = `vpn_user_${tgId}`;
     const uuid = 'dummy-uuid-force-extend';
-    const connectionUrl = 'vless://dummy-uuid-force-extend@your-server-ip:443?path=%2F&security=reality&encryption=none#Knight_Space';
+    const connectionUrl = 'vless://dummy-uuid-force-extend@your-server-ip:443?path=%2F&security=reality&encryption=none#Knight_VPN';
     return await createSubscription(tgId, email, uuid, connectionUrl, 'Admin Bonus', days);
   }
 }

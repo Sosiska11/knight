@@ -41,15 +41,16 @@ bot.start(async (ctx) => {
   const welcomeText = `
 👋 <b>Привет, ${name}!</b>
 
-Добро пожаловать на закрытую информационную ИТ-платформу <b>Knight Space</b>! 🚀
+Добро пожаловать в бот <b>Knight VPN</b>! 🚀
 
-📚 <b>В нашем закрытом клубе вы найдете:</b>
-• Подробные обучающие материалы по информационной безопасности
-• Пошаговые гайды по компьютерной грамотности
-• Инструкции по безопасной настройке домашних сетей
-• Защита персональных данных в сети Интернет
+🛡 <b>Наш сервис предоставляет:</b>
+• Высокоскоростной и стабильный доступ без каких-либо блокировок
+• Современный и незаметный протокол шифрования <b>VLESS Reality</b>
+• Безлимитный трафик на максимальной скорости
+• Поддержку всех ваших устройств (iOS, Android, Windows, macOS)
+• Удобное подключение за 1 минуту через приложение <b>Hiddify</b>
 
-🎁 Для новых участников доступен <b>бесплатный пробный доступ на 3 дня</b>!
+🎁 Для новых пользователей доступен <b>бесплатный пробный период на 3 дня</b>!
 Перейдите в раздел 👤 <b>Мой профиль</b>, чтобы активировать его.
   `;
 
@@ -88,10 +89,10 @@ async function showProfile(ctx) {
     profileText += `• <b>Статус доступа:</b> ✅ Активен\n`;
     profileText += `• <b>Тариф:</b> ${activeSub.plan_name}\n`;
     profileText += `• <b>Действует до (МСК):</b> <code>${expiryDate}</code>\n\n`;
-    profileText += `📥 Ваш персональный ключ доступа к ИТ-платформе готов. Нажмите на кнопку ниже, чтобы получить его.`;
+    profileText += `📥 Ваш персональный ключ доступа к Knight VPN готов. Нажмите на кнопку ниже, чтобы получить его.`;
 
     inlineButtons.push([Markup.button.callback('🔑 Получить ключ доступа', 'get_key')]);
-    inlineButtons.push([Markup.button.callback('🔄 Продлить доступ', 'buy_menu')]);
+    inlineButtons.push([Markup.button.callback('🔄 Продлить подписку', 'buy_menu')]);
   } else {
     profileText += `• <b>Статус доступа:</b> ❌ Неактивен\n\n`;
     
@@ -99,10 +100,10 @@ async function showProfile(ctx) {
       profileText += `🎁 Вам доступен бесплатный пробный доступ на 3 дня!`;
       inlineButtons.push([Markup.button.callback('🎁 Активировать тест (3 дня)', 'activate_trial')]);
     } else {
-      profileText += `Для ознакомления с материалами оформите доступ.`;
+      profileText += `Для подключения к VPN, пожалуйста, оформите подписку.`;
     }
     
-    inlineButtons.push([Markup.button.callback('💳 Оформить доступ', 'buy_menu')]);
+    inlineButtons.push([Markup.button.callback('💳 Оформить подписку', 'buy_menu')]);
   }
 
   await ctx.reply(profileText, {
@@ -123,7 +124,7 @@ bot.action('get_key', async (ctx) => {
   await ctx.answerCbQuery();
   
   const keyText = `
-🔑 <b>Ваш персональный ключ доступа к ИТ-платформе Knight Space (подписка):</b>
+🔑 <b>Ваш персональный ключ доступа к Knight VPN (подписка):</b>
 <code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
 
 <i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
@@ -206,7 +207,7 @@ bot.action('activate_trial', async (ctx) => {
     const keyText = `
 🎉 <b>Пробный доступ успешно активирован!</b>
 
-Доступ к ИТ-платформе предоставлен на 3 дня.
+Доступ к Knight VPN предоставлен на 3 дня.
 🔑 <b>Ваш персональный ключ доступа (подписка):</b>
 <code>${config.SUB_SERVER_URL}/sub/${client.uuid}</code>
 
@@ -239,13 +240,13 @@ bot.action('profile_menu', async (ctx) => {
 
 async function showBuyMenu(ctx) {
   const plansText = `
-💳 <b>Выберите длительность доступа к материалам IT-платформы:</b>
+💳 <b>Выберите длительность подписки Knight VPN:</b>
 
-• <b>1 месяц доступа</b> — 150 ₽
-• <b>3 месяца доступа</b> — 400 ₽ <i>(выгода 50 ₽)</i>
-• <b>6 месяцев доступа</b> — 750 ₽ <i>(выгода 150 ₽)</i>
+• <b>1 месяц подписки</b> — 150 ₽
+• <b>3 месяца подписки</b> — 400 ₽ <i>(выгода 50 ₽)</i>
+• <b>6 месяцев подписки</b> — 750 ₽ <i>(выгода 150 ₽)</i>
 
-<i>Доступ активируется автоматически после подтверждения транзакции.</i>
+<i>Подписка активируется автоматически после подтверждения транзакции.</i>
   `;
 
   const keyboard = Markup.inlineKeyboard([
@@ -279,7 +280,7 @@ const buyPlanAction = (planId) => async (ctx) => {
 
 После оплаты, пожалуйста, пришлите скриншот чека в поддержку: @alexs_vpn_admin <i>(замените ник в src/bot.js на ваш)</i>.
 
-После подтверждения администратор сразу активирует ваш доступ к платформе!
+После подтверждения администратор сразу активирует вашу подписку!
     `;
     return ctx.reply(manualPaymentText, { parse_mode: 'HTML' });
   }
@@ -368,7 +369,7 @@ bot.on('successful_payment', async (ctx) => {
       await ctx.reply(`
 🎉 <b>Оплата успешно получена!</b>
 
-Ваш доступ к материалам продлен на <b>${plan.days} дней</b>.
+Ваша подписка Knight VPN продлена на <b>${plan.days} дней</b>.
 Новая дата окончания (МСК): <code>${new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU')}</code>
 
 Ваш персональный ключ доступа остается прежним!
@@ -403,7 +404,7 @@ bot.on('successful_payment', async (ctx) => {
       );
 
       const keyText = `
-🎉 <b>Оплата успешно получена! Доступ к ИТ-платформе Knight Space активирован!</b>
+🎉 <b>Оплата успешно получена! Подписка Knight VPN активирована!</b>
 
 Спасибо за покупку! Доступ предоставлен на <b>${plan.days} дней</b>.
 Действует до (МСК): <code>${new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU')}</code>
@@ -424,86 +425,236 @@ bot.on('successful_payment', async (ctx) => {
   }
 });
 
-// Handler for "⚙️ Инструкция по авторизации"
-bot.hears('⚙️ Инструкция по авторизации', async (ctx) => {
+// Function to send/edit OS selection menu
+async function sendInstructionsMenu(ctx, isCallback = false) {
   const instructionsText = `
-⚙️ <b>Инструкция по авторизации на ИТ-платформе Knight Space:</b>
+⚙️ <b>Инструкция по подключению к Knight VPN</b>
 
-Выберите вашу операционную систему для настройки клиента авторизации:
+Выберите вашу операционную систему / устройство для настройки подключения:
   `;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🍏 iOS (iPhone/iPad)', 'inst_ios')],
-    [Markup.button.callback('🤖 Android', 'inst_android')],
-    [Markup.button.callback('💻 Windows', 'inst_windows')],
-    [Markup.button.callback('🍎 macOS', 'inst_macos')],
+    [
+      Markup.button.callback('🍏 iOS (iPhone/iPad)', 'inst_ios'),
+      Markup.button.callback('🤖 Android', 'inst_android')
+    ],
+    [
+      Markup.button.callback('💻 Windows', 'inst_windows'),
+      Markup.button.callback('🍎 macOS', 'inst_macos')
+    ]
   ]);
 
-  await ctx.reply(instructionsText, {
-    parse_mode: 'HTML',
-    ...keyboard
-  });
+  if (isCallback) {
+    try {
+      await ctx.editMessageText(instructionsText, {
+        parse_mode: 'HTML',
+        ...keyboard
+      });
+    } catch (err) {
+      // Fallback if message edit fails
+      await ctx.reply(instructionsText, {
+        parse_mode: 'HTML',
+        ...keyboard
+      });
+    }
+  } else {
+    await ctx.reply(instructionsText, {
+      parse_mode: 'HTML',
+      ...keyboard
+    });
+  }
+}
+
+// Handler for "⚙️ Инструкция по авторизации"
+bot.hears('⚙️ Инструкция по авторизации', async (ctx) => {
+  await sendInstructionsMenu(ctx, false);
+});
+
+// Callback for back button
+bot.action('inst_back', async (ctx) => {
+  try {
+    await ctx.answerCbQuery();
+  } catch (err) {
+    console.warn('⚠️ Callback query answer failed:', err.message);
+  }
+  await sendInstructionsMenu(ctx, true);
+});
+
+// Callback for getting key inside instructions flow
+bot.action('get_key_from_inst', async (ctx) => {
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+
+  if (!activeSub) {
+    try {
+      return await ctx.answerCbQuery('У вас нет активного доступа!', { show_alert: true });
+    } catch (err) {
+      return ctx.reply('❌ У вас нет активного доступа!');
+    }
+  }
+
+  try {
+    await ctx.answerCbQuery();
+  } catch (err) {
+    console.warn('⚠️ Callback query answer failed:', err.message);
+  }
+
+  const keyText = `
+🔑 <b>Ваш персональный ключ доступа к Knight VPN (подписка):</b>
+<code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
+
+<i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
+
+⚙️ <b>Быстрая настройка через Hiddify:</b>
+1️⃣ Скопируйте ссылку подписки выше
+2️⃣ Откройте приложение <b>Hiddify</b>
+3️⃣ Нажмите <b>«Новый профиль»</b> (или ➕ вверху справа)
+4️⃣ Выберите <b>«Добавить из буфера обмена»</b>
+5️⃣ Нажмите кнопку подключения в центре экрана
+  `;
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')],
+    [Markup.button.callback('🔙 Назад к инструкции', 'inst_back')]
+  ]);
+
+  await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
 });
 
 // Instruction details callbacks
 const showInstruction = (os) => async (ctx) => {
-  await ctx.answerCbQuery();
+  try {
+    await ctx.answerCbQuery();
+  } catch (err) {
+    console.warn('⚠️ Callback query answer failed:', err.message);
+  }
   let text = '';
+  let inlineKeyboard = [];
   
   if (os === 'ios') {
     text = `
-🍏 <b>Инструкция для iOS (iPhone, iPad):</b>
+🍏 <b>Подключение на iOS (iPhone, iPad)</b>
 
-1️⃣ Установите приложение <b>Hiddify</b>:
-   👉 <a href="https://apps.apple.com/app/hiddify/id6477388749">Установить Hiddify из App Store</a>
-2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота (раздел 👤 <b>Мой профиль</b> -> 🔑 <b>Получить ключ доступа</b>).
-3️⃣ Откройте приложение Hiddify:
-   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
-   • Выберите пункт <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
-4️⃣ Нажмите большую круглую кнопку в центре экрана для активации безопасного подключения.
+1️⃣ <b>Установите приложение Hiddify:</b>
+Нажмите кнопку <b>«Скачать из App Store»</b> ниже.
+
+2️⃣ <b>Скопируйте ключ подписки:</b>
+Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+
+3️⃣ <b>Добавьте ссылку в приложение:</b>
+• Откройте <b>Hiddify</b>.
+• Нажмите <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
+• Выберите <b>«Добавить из буфера обмена»</b>.
+
+4️⃣ <b>Подключитесь:</b>
+Нажмите на большую круглую кнопку в центре экрана.
+
+━━━━━━━━━━━━━━━━━━
+<i>Приложение будет автоматически обновлять конфигурации.</i>
     `;
+    inlineKeyboard = [
+      [Markup.button.url('📥 Скачать из App Store', 'https://apps.apple.com/app/hiddify/id6477388749')],
+      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
+      [Markup.button.callback('🔙 Назад', 'inst_back')]
+    ];
   } else if (os === 'android') {
     text = `
-🤖 <b>Инструкция для Android:</b>
+🤖 <b>Подключение на Android</b>
 
-1️⃣ Установите приложение <b>Hiddify</b>:
-   👉 <a href="https://play.google.com/store/apps/details?id=app.hiddify.com">Установить Hiddify из Google Play</a>
-   👉 <a href="https://github.com/hiddify/hiddify-next/releases">Скачать APK напрямую с GitHub</a>
-2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота (раздел 👤 <b>Мой профиль</b> -> 🔑 <b>Получить ключ доступа</b>).
-3️⃣ Откройте приложение Hiddify:
-   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
-   • Выберите пункт <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
-4️⃣ Нажмите большую круглую кнопку в центре экрана и подтвердите создание VPN-подключения в системе.
+1️⃣ <b>Установите приложение Hiddify:</b>
+Установите из <b>Google Play</b> или скачайте <b>APK-файл</b> напрямую с GitHub по кнопкам ниже.
+
+2️⃣ <b>Скопируйте ключ подписки:</b>
+Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+
+3️⃣ <b>Настройте Hiddify:</b>
+• Откройте приложение.
+• Нажмите <b>«Новый профиль»</b> (или значок ➕).
+• Выберите <b>«Добавить из буфера обмена»</b>.
+
+4️⃣ <b>Подключитесь:</b>
+Нажмите большую круглую кнопку в центре экрана и разрешите VPN-соединение.
+
+━━━━━━━━━━━━━━━━━━
+<i>Подходит для любых Android-смартфонов, планшетов и Android TV.</i>
     `;
+    inlineKeyboard = [
+      [
+        Markup.button.url('📥 Google Play', 'https://play.google.com/store/apps/details?id=app.hiddify.com'),
+        Markup.button.url('📥 APK с GitHub', 'https://github.com/hiddify/hiddify-next/releases')
+      ],
+      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
+      [Markup.button.callback('🔙 Назад', 'inst_back')]
+    ];
   } else if (os === 'windows') {
     text = `
-💻 <b>Инструкция для Windows:</b>
+💻 <b>Подключение на Windows</b>
 
-1️⃣ Скачайте и установите программу <b>Hiddify</b>:
-   👉 <a href="https://github.com/hiddify/hiddify-next/releases">Скачать Hiddify для Windows с GitHub</a>
-   <i>(Рекомендуется скачать файл с расширением .setup.exe)</i>
-2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота.
-3️⃣ Откройте Hiddify:
-   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
-   • Нажмите кнопку <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
-4️⃣ Нажмите большую круглую кнопку подключения в центре программы.
+1️⃣ <b>Скачайте Hiddify для Windows:</b>
+Скачайте установщик <code>.setup.exe</code> с официального GitHub по кнопке ниже.
+
+2️⃣ <b>Скопируйте ключ подписки:</b>
+Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+
+3️⃣ <b>Настройте программу:</b>
+• Запустите <b>Hiddify</b>.
+• Нажмите <b>«Новый профиль»</b> ➡️ <b>«Добавить из буфера обмена»</b>.
+
+4️⃣ <b>Подключитесь:</b>
+Нажмите круглую кнопку включения в центре программы.
+
+━━━━━━━━━━━━━━━━━━
+<i>При первой установке может потребоваться подтверждение запуска от SmartScreen.</i>
     `;
+    inlineKeyboard = [
+      [Markup.button.url('📥 Скачать для Windows', 'https://github.com/hiddify/hiddify-next/releases')],
+      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
+      [Markup.button.callback('🔙 Назад', 'inst_back')]
+    ];
   } else if (os === 'macos') {
     text = `
-🍎 <b>Инструкция для macOS:</b>
+🍎 <b>Подключение на macOS</b>
 
-1️⃣ Установите программу <b>Hiddify</b>:
-   👉 <a href="https://apps.apple.com/app/hiddify/id6477388749">Установить Hiddify из App Store</a>
-   👉 <a href="https://github.com/hiddify/hiddify-next/releases">Скачать для macOS с GitHub</a>
-2️⃣ Скопируйте ваш персональный <b>ключ доступа (подписку)</b> из бота.
-3️⃣ Откройте Hiddify:
-   • Нажмите кнопку <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
-   • Выберите <b>«Добавить из буфера обмена»</b> (Add from Clipboard).
-4️⃣ Нажмите большую круглую кнопку подключения в центре.
+1️⃣ <b>Установите Hiddify:</b>
+Установите из App Store или скачайте установщик с GitHub по кнопкам ниже.
+
+2️⃣ <b>Скопируйте ключ подписки:</b>
+Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+
+3️⃣ <b>Добавьте профиль:</b>
+• Откройте <b>Hiddify</b>.
+• Нажмите <b>«Новый профиль»</b> ➡️ <b>«Добавить из буфера обмена»</b>.
+
+4️⃣ <b>Подключитесь:</b>
+Нажмите большую круглую кнопку в центре.
+
+━━━━━━━━━━━━━━━━━━
+<i>Рекомендуется использовать версию из App Store для macOS.</i>
     `;
+    inlineKeyboard = [
+      [
+        Markup.button.url('📥 App Store', 'https://apps.apple.com/app/hiddify/id6477388749'),
+        Markup.button.url('📥 GitHub Releases', 'https://github.com/hiddify/hiddify-next/releases')
+      ],
+      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
+      [Markup.button.callback('🔙 Назад', 'inst_back')]
+    ];
   }
 
-  await ctx.reply(text, { parse_mode: 'HTML', disable_web_page_preview: true });
+  try {
+    await ctx.editMessageText(text, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      ...Markup.inlineKeyboard(inlineKeyboard)
+    });
+  } catch (err) {
+    // Fallback if editMessageText fails
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+      ...Markup.inlineKeyboard(inlineKeyboard)
+    });
+  }
 };
 
 bot.action('inst_ios', showInstruction('ios'));
@@ -514,9 +665,9 @@ bot.action('inst_macos', showInstruction('macos'));
 // Handler for "🆘 Поддержка"
 bot.hears('🆘 Поддержка', async (ctx) => {
   const supportText = `
-🆘 <b>Служба поддержки Knight Space</b>
+🆘 <b>Служба поддержки Knight VPN</b>
 
-Если у вас возникли вопросы по оплате, авторизации или доступу к обучающим материалам — напишите администратору:
+Если у вас возникли вопросы по оплате, настройке или работе VPN — напишите администратору:
 
 👨‍💻 <b>Контакты администратора:</b> @alexs_vpn_admin
 
@@ -547,7 +698,7 @@ async function showAdminPanel(ctx) {
 • <code>/give [id] [days]</code> — Предоставить/продлить доступ пользователю на X дней.
   Пример: <code>/give 123456789 30</code>
 • <code>/broadcast [текст]</code> — Отправить сообщение всем участникам.
-  Пример: <code>/broadcast Внимание! Проводятся технические работы на платформе.</code>
+  Пример: <code>/broadcast Внимание! Проводятся технические работы.</code>
   `;
 
   await ctx.reply(adminText, { parse_mode: 'HTML' });
@@ -609,7 +760,7 @@ bot.command('give', async (ctx) => {
     // Notify user
     try {
       const userKeyText = `
-🎁 <b>Администратор предоставил вам доступ к ИТ-платформе Knight Space на ${days} дней!</b>
+🎁 <b>Администратор предоставил/продлил вам подписку Knight VPN на ${days} дней!</b>
 
 Новая дата окончания (МСК): <code>${expiryDate}</code>
 
@@ -658,6 +809,11 @@ bot.command('broadcast', async (ctx) => {
   }
 
   await ctx.reply(`📢 <b>Рассылка завершена!</b>\n\n✅ Успешно отправлено: <code>${successCount}</code>\n❌ Ошибок отправки: <code>${failCount}</code>`, { parse_mode: 'HTML' });
+});
+
+// Global error handling to prevent crash on Telegram API errors
+bot.catch((err, ctx) => {
+  console.error(`❌ Telegraf caught an error for update ${ctx?.update?.update_id}:`, err);
 });
 
 export default bot;
