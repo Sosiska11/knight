@@ -48,7 +48,7 @@ bot.start(async (ctx) => {
 • Современный и незаметный протокол шифрования <b>VLESS Reality</b>
 • Безлимитный трафик на максимальной скорости
 • Поддержку всех ваших устройств (iOS, Android, Windows, macOS)
-• Удобное подключение за 1 минуту через приложение <b>Hiddify</b>
+• Удобное подключение за 1 минуту через приложение <b>Happ</b>
 
 🎁 Для новых пользователей доступен <b>бесплатный пробный период на 3 дня</b>!
 Перейдите в раздел 👤 <b>Мой профиль</b>, чтобы активировать его.
@@ -129,17 +129,19 @@ bot.action('get_key', async (ctx) => {
 
 <i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
 
-⚙️ <b>Быстрая настройка через Hiddify (рекомендуется):</b>
-1. Установите приложение <b>Hiddify</b> (ссылки для скачивания в разделе «⚙️ Инструкция по авторизации»)
+⚙️ <b>Быстрая настройка через Happ (рекомендуется):</b>
+1. Установите приложение <b>Happ</b> (ссылки для скачивания в разделе «⚙️ Инструкция по авторизации»)
 2. Скопируйте вашу ссылку подписки выше
-3. Откройте приложение, нажмите <b>«Новый профиль»</b> (или ➕ в правом верхнем углу)
+3. Откройте приложение, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
 4. Выберите <b>«Добавить из буфера обмена»</b>
-5. Нажмите большую кнопку подключения в центре экрана
+5. Нажмите кнопку подключения в центре экрана
 
 <i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>
   `;
 
+  const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
   const keyboard = Markup.inlineKeyboard([
+    [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
     [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
   ]);
 
@@ -163,7 +165,7 @@ bot.action('get_static_key', async (ctx) => {
 
 <i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>
 
-⚠️ <i>Используйте этот статический ключ только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок. Для автоматического обновления конфигурации и удобного просмотра срока действия подписки рекомендуем использовать приложение Hiddify со ссылкой для подписки.</i>
+⚠️ <i>Используйте этот статический ключ только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок. Для автоматического обновления конфигурации и удобного просмотра срока действия подписки рекомендуем использовать приложение Happ со ссылкой для подписки.</i>
   `;
 
   await ctx.reply(keyText, { parse_mode: 'HTML' });
@@ -213,7 +215,9 @@ bot.action('activate_trial', async (ctx) => {
 
 <i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
     `;
+    const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
     const keyboard = Markup.inlineKeyboard([
+      [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
       [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
     ]);
     await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
@@ -414,7 +418,9 @@ bot.on('successful_payment', async (ctx) => {
 
 <i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
       `;
+      const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
       const keyboard = Markup.inlineKeyboard([
+        [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
         [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
       ]);
       await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
@@ -505,10 +511,10 @@ bot.action('get_key_from_inst', async (ctx) => {
 
 <i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
 
-⚙️ <b>Быстрая настройка через Hiddify:</b>
+⚙️ <b>Быстрая настройка через Happ:</b>
 1️⃣ Скопируйте ссылку подписки выше
-2️⃣ Откройте приложение <b>Hiddify</b>
-3️⃣ Нажмите <b>«Новый профиль»</b> (или ➕ вверху справа)
+2️⃣ Откройте приложение <b>Happ</b>
+3️⃣ Нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
 4️⃣ Выберите <b>«Добавить из буфера обмена»</b>
 5️⃣ Нажмите кнопку подключения в центре экрана
   `;
@@ -528,6 +534,13 @@ const showInstruction = (os) => async (ctx) => {
   } catch (err) {
     console.warn('⚠️ Callback query answer failed:', err.message);
   }
+
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+  const subUrl = activeSub ? `${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}` : null;
+  const autoImportUrl = subUrl ? `sing-box://import-remote?url=${encodeURIComponent(subUrl)}` : null;
+  const autoImportRedirectUrl = activeSub ? `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}` : null;
+
   let text = '';
   let inlineKeyboard = [];
   
@@ -535,110 +548,130 @@ const showInstruction = (os) => async (ctx) => {
     text = `
 🍏 <b>Подключение на iOS (iPhone, iPad)</b>
 
-1️⃣ <b>Установите приложение Hiddify:</b>
+1️⃣ <b>Установите приложение Happ:</b>
 Нажмите кнопку <b>«Скачать из App Store»</b> ниже.
 
-2️⃣ <b>Скопируйте ключ подписки:</b>
-Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+2️⃣ <b>Добавьте подписку:</b>
+${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
+👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
 
-3️⃣ <b>Добавьте ссылку в приложение:</b>
-• Откройте <b>Hiddify</b>.
-• Нажмите <b>«Новый профиль»</b> (или значок ➕ в правом верхнем углу).
-• Выберите <b>«Добавить из буфера обмена»</b>.
+<i>Если авто-импорт не сработал:</i>
+• Скопируйте ссылку подписки вручную из раздела «👤 Мой профиль».
+• Откройте <b>Happ</b>, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта) и выберите <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>
+Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
 
-4️⃣ <b>Подключитесь:</b>
-Нажмите на большую круглую кнопку в центре экрана.
+3️⃣ <b>Подключитесь:</b>
+Нажмите круглую кнопку в центре экрана приложения для запуска VPN. Разрешите системе добавить конфигурацию VPN.
 
 ━━━━━━━━━━━━━━━━━━
 <i>Приложение будет автоматически обновлять конфигурации.</i>
     `;
-    inlineKeyboard = [
-      [Markup.button.url('📥 Скачать из App Store', 'https://apps.apple.com/app/hiddify/id6477388749')],
-      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
-      [Markup.button.callback('🔙 Назад', 'inst_back')]
-    ];
+    inlineKeyboard.push([Markup.button.url('📥 Скачать из App Store', 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215')]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
+    }
+    inlineKeyboard.push([
+      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
+      Markup.button.callback('🔙 Назад', 'inst_back')
+    ]);
+
   } else if (os === 'android') {
     text = `
 🤖 <b>Подключение на Android</b>
 
-1️⃣ <b>Установите приложение Hiddify:</b>
+1️⃣ <b>Установите приложение Sing-box (совместимое с Happ):</b>
 Установите из <b>Google Play</b> или скачайте <b>APK-файл</b> напрямую с GitHub по кнопкам ниже.
 
-2️⃣ <b>Скопируйте ключ подписки:</b>
-Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+2️⃣ <b>Добавьте подписку:</b>
+${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
+👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
 
-3️⃣ <b>Настройте Hiddify:</b>
-• Откройте приложение.
-• Нажмите <b>«Новый профиль»</b> (или значок ➕).
-• Выберите <b>«Добавить из буфера обмена»</b>.
+<i>Если авто-импорт не сработал:</i>
+• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».
+• В приложении нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>
+Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
 
-4️⃣ <b>Подключитесь:</b>
-Нажмите большую круглую кнопку в центре экрана и разрешите VPN-соединение.
+3️⃣ <b>Подключитесь:</b>
+Нажмите кнопку включения в центре экрана приложения и подтвердите создание VPN-подключения в системном запросе Android.
 
 ━━━━━━━━━━━━━━━━━━
 <i>Подходит для любых Android-смартфонов, планшетов и Android TV.</i>
     `;
-    inlineKeyboard = [
-      [
-        Markup.button.url('📥 Google Play', 'https://play.google.com/store/apps/details?id=app.hiddify.com'),
-        Markup.button.url('📥 APK с GitHub', 'https://github.com/hiddify/hiddify-next/releases')
-      ],
-      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
-      [Markup.button.callback('🔙 Назад', 'inst_back')]
-    ];
+    inlineKeyboard.push([
+      Markup.button.url('📥 Google Play', 'https://play.google.com/store/apps/details?id=io.nekohasekai.sfa'),
+      Markup.button.url('📥 APK с GitHub', 'https://github.com/SagerNet/sing-box/releases')
+    ]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
+    }
+    inlineKeyboard.push([
+      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
+      Markup.button.callback('🔙 Назад', 'inst_back')
+    ]);
+
   } else if (os === 'windows') {
     text = `
 💻 <b>Подключение на Windows</b>
 
-1️⃣ <b>Скачайте Hiddify для Windows:</b>
-Скачайте установщик <code>.setup.exe</code> с официального GitHub по кнопке ниже.
+1️⃣ <b>Скачайте Sing-box для Windows (совместимый с Happ):</b>
+Нажмите кнопку <b>«📥 Скачать для Windows»</b> ниже для перехода к релизам программы.
 
-2️⃣ <b>Скопируйте ключ подписки:</b>
-Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+2️⃣ <b>Добавьте подписку:</b>
+${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
+👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
 
-3️⃣ <b>Настройте программу:</b>
-• Запустите <b>Hiddify</b>.
-• Нажмите <b>«Новый профиль»</b> ➡️ <b>«Добавить из буфера обмена»</b>.
+<i>Если авто-импорт не сработал:</i>
+• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».
+• В программе добавьте новый профиль из буфера обмена.` : `⚠️ <b>У вас нет активной подписки!</b>
+Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
 
-4️⃣ <b>Подключитесь:</b>
-Нажмите круглую кнопку включения в центре программы.
+3️⃣ <b>Подключитесь:</b>
+Запустите созданный профиль в программе.
 
 ━━━━━━━━━━━━━━━━━━
-<i>При первой установке может потребоваться подтверждение запуска от SmartScreen.</i>
+<i>При первом запуске брандмауэр Windows может запросить разрешение — подтвердите его.</i>
     `;
-    inlineKeyboard = [
-      [Markup.button.url('📥 Скачать для Windows', 'https://github.com/hiddify/hiddify-next/releases')],
-      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
-      [Markup.button.callback('🔙 Назад', 'inst_back')]
-    ];
+    inlineKeyboard.push([Markup.button.url('📥 Скачать для Windows (.exe)', 'https://github.com/SagerNet/sing-box/releases')]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
+    }
+    inlineKeyboard.push([
+      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
+      Markup.button.callback('🔙 Назад', 'inst_back')
+    ]);
+
   } else if (os === 'macos') {
     text = `
 🍎 <b>Подключение на macOS</b>
 
-1️⃣ <b>Установите Hiddify:</b>
-Установите из App Store или скачайте установщик с GitHub по кнопкам ниже.
+1️⃣ <b>Установите приложение Happ:</b>
+Скачайте из App Store по кнопке ниже.
 
-2️⃣ <b>Скопируйте ключ подписки:</b>
-Скопируйте вашу ссылку подписки в боте (кнопка <b>«🔑 Получить ключ»</b> ниже).
+2️⃣ <b>Добавьте подписку:</b>
+${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
+👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
 
-3️⃣ <b>Добавьте профиль:</b>
-• Откройте <b>Hiddify</b>.
-• Нажмите <b>«Новый профиль»</b> ➡️ <b>«Добавить из буфера обмена»</b>.
+<i>Если авто-импорт не сработал:</i>
+• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».
+• В программе <b>Happ</b> нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>
+Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
 
-4️⃣ <b>Подключитесь:</b>
-Нажмите большую круглую кнопку в центре.
+3️⃣ <b>Подключитесь:</b>
+Нажмите кнопку включения в программе для запуска VPN.
 
 ━━━━━━━━━━━━━━━━━━
-<i>Рекомендуется использовать версию из App Store для macOS.</i>
+<i>Рекомендуется использовать официальное приложение Happ для автоматического обновления профилей.</i>
     `;
-    inlineKeyboard = [
-      [
-        Markup.button.url('📥 App Store', 'https://apps.apple.com/app/hiddify/id6477388749'),
-        Markup.button.url('📥 GitHub Releases', 'https://github.com/hiddify/hiddify-next/releases')
-      ],
-      [Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst')],
-      [Markup.button.callback('🔙 Назад', 'inst_back')]
-    ];
+    inlineKeyboard.push([
+      Markup.button.url('📥 Скачать из App Store', 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215')
+    ]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
+    }
+    inlineKeyboard.push([
+      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
+      Markup.button.callback('🔙 Назад', 'inst_back')
+    ]);
   }
 
   try {
@@ -769,7 +802,9 @@ bot.command('give', async (ctx) => {
 
 <i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
       `;
+      const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${updatedSub.client_uuid}`;
       const keyboard = Markup.inlineKeyboard([
+        [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
         [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
       ]);
       await bot.telegram.sendMessage(targetId, userKeyText, { parse_mode: 'HTML', ...keyboard });
