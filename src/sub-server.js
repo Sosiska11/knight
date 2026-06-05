@@ -32,8 +32,16 @@ app.get('/sub/:uuid', async (req, res) => {
       `upload=0; download=0; total=1099511627776; expire=${expireTimestamp}`
     );
 
+    // Dynamically override the server name/remark with a beautiful name and flag
+    let connectionUrl = sub.connection_url;
+    if (connectionUrl.includes('#')) {
+      connectionUrl = connectionUrl.split('#')[0] + '#⚔️ 🇳🇱 Knight VPN | Netherlands';
+    } else {
+      connectionUrl = connectionUrl + '#⚔️ 🇳🇱 Knight VPN | Netherlands';
+    }
+
     // Base64 encode the connection URL (standard format for V2Ray subscriptions)
-    const base64Config = Buffer.from(sub.connection_url + '\n').toString('base64');
+    const base64Config = Buffer.from(connectionUrl + '\n').toString('base64');
     
     res.send(base64Config);
   } catch (error) {
