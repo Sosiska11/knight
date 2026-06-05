@@ -159,6 +159,14 @@ class XuiClient {
       return { email, uuid, connectionUrl: mockLink };
     }
 
+    // Clean up any existing client with the same email to avoid collisions (e.g. after database resets)
+    try {
+      console.log(`🧹 Cleaning up any pre-existing client with email: ${email}`);
+      await this.deleteClient(email, uuid);
+    } catch (err) {
+      // Ignore error if the client did not exist
+    }
+
     try {
       const headers = await this.getHeaders();
       if (this.mockMode) return this.addClient(email, uuid);
