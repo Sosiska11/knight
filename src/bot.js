@@ -309,10 +309,11 @@ const buyPlanAction = (planId) => async (ctx) => {
       invoice.description,
       invoice.payload,
       invoice.provider_token,
-      invoice.start_parameter,
       invoice.currency,
       invoice.prices,
-      {}
+      {
+        start_parameter: invoice.start_parameter
+      }
     );
   } catch (error) {
     console.error('Invoice creation error:', error);
