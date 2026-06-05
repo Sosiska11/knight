@@ -408,113 +408,40 @@ app.get('/import/:uuid', async (req, res) => {
         function importHapp() {
             if (cryptoUrl) {
                 window.location.href = cryptoUrl;
+                // Fallback to direct add if the encrypted link doesn't trigger anything after 1.5s
+                setTimeout(function() {
+                    window.location.href = "happ://add/" + subUrl;
+                }, 1500);
                 return;
             }
-            const cleanUrl = subUrl.replace(/^https?:\\/\\//, '');
 
-            // 1. Try Hiddify style (hash) on happ://
-            window.location.href = "happ://import/#" + subUrl;
+            // iOS Happ Direct Link (Primary Option)
+            window.location.href = "happ://add/" + subUrl;
 
-            // 2. Try Hiddify style (hash) on happ-proxy://
+            // Alternative schemes with delay
+            setTimeout(function() {
+                window.location.href = "happ-proxy://add/" + subUrl;
+            }, 150);
+
+            setTimeout(function() {
+                window.location.href = "happ-proxy-utility://add/" + subUrl;
+            }, 300);
+
+            setTimeout(function() {
+                window.location.href = "happ://import/#" + subUrl;
+            }, 450);
+
             setTimeout(function() {
                 window.location.href = "happ-proxy://import/#" + subUrl;
-            }, 100);
-
-            // 3. Try FoXray style (yargs) on happ:// (Happ is Xray-based)
-            setTimeout(function() {
-                window.location.href = "happ://yargs?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 200);
-            
-            // 4. Try Streisand style (import) on happ://
-            setTimeout(function() {
-                window.location.href = "happ://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 300);
-            
-            // 5. Try Shadowrocket style (add) on happ://
-            setTimeout(function() {
-                window.location.href = "happ://add/https://" + cleanUrl;
-            }, 400);
-
-            // 6. Try Streisand sub-link style (import/https) on happ://
-            setTimeout(function() {
-                window.location.href = "happ://import/https://" + cleanUrl;
-            }, 500);
-
-            // 7. Try config/https style on happ://
-            setTimeout(function() {
-                window.location.href = "happ://config/https://" + cleanUrl;
             }, 600);
 
-            // 8. Try sub/https style on happ://
             setTimeout(function() {
-                window.location.href = "happ://sub/https://" + cleanUrl;
-            }, 700);
-
-            // --- happ-proxy:// variations ---
-
-            // 9. Try FoXray style (yargs) on happ-proxy://
+                window.location.href = "happ://yargs?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
+            }, 750);
+            
             setTimeout(function() {
-                window.location.href = "happ-proxy://yargs?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 800);
-
-            // 10. Try Streisand style (import) on happ-proxy://
-            setTimeout(function() {
-                window.location.href = "happ-proxy://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
+                window.location.href = "happ://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
             }, 900);
-
-            // 11. Try Shadowrocket style (add) on happ-proxy://
-            setTimeout(function() {
-                window.location.href = "happ-proxy://add/https://" + cleanUrl;
-            }, 1000);
-
-            // 12. Try Streisand sub-link style (import/https) on happ-proxy://
-            setTimeout(function() {
-                window.location.href = "happ-proxy://import/https://" + cleanUrl;
-            }, 1100);
-
-            // 13. Try config/https style on happ-proxy://
-            setTimeout(function() {
-                window.location.href = "happ-proxy://config/https://" + cleanUrl;
-            }, 1200);
-
-            // 14. Try sub/https style on happ-proxy://
-            setTimeout(function() {
-                window.location.href = "happ-proxy://sub/https://" + cleanUrl;
-            }, 1300);
-
-            // --- happ-proxy-utility:// variations ---
-
-            // 15. Try FoXray style (yargs) on happ-proxy-utility://
-            setTimeout(function() {
-                window.location.href = "happ-proxy-utility://yargs?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 1400);
-
-            // 16. Try Streisand style (import) on happ-proxy-utility://
-            setTimeout(function() {
-                window.location.href = "happ-proxy-utility://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 1500);
-
-            // 17. Try Shadowrocket style (add) on happ-proxy-utility://
-            setTimeout(function() {
-                window.location.href = "happ-proxy-utility://add/https://" + cleanUrl;
-            }, 1600);
-
-            // 18. Try Hiddify style (hash) on happ-proxy-utility://
-            setTimeout(function() {
-                window.location.href = "happ-proxy-utility://import/#" + subUrl;
-            }, 1700);
-
-            // --- Sing-box fallback variations ---
-
-            // 19. Fallback to sing-box style on happ://
-            setTimeout(function() {
-                window.location.href = "happ://import-remote?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 1800);
-
-            // 20. Fallback to sing-box style on happ-proxy://
-            setTimeout(function() {
-                window.location.href = "happ-proxy://import-remote?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN";
-            }, 1900);
         }
 
         function importSingBox() {
@@ -522,8 +449,7 @@ app.get('/import/:uuid', async (req, res) => {
         }
 
         function importShadowrocket() {
-            const cleanUrl = subUrl.replace(/^https?:\\/\\//, '');
-            window.location.href = "shadowrocket://add/https://" + cleanUrl;
+            window.location.href = "shadowrocket://add/" + subUrl;
         }
 
         function importHiddify() {
