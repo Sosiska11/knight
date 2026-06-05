@@ -304,17 +304,7 @@ const buyPlanAction = (planId) => async (ctx) => {
     await db.createPayment(tgId, paymentId, plan.price, planId);
     
     // Send invoice
-    await ctx.replyWithInvoice(
-      invoice.title,
-      invoice.description,
-      invoice.payload,
-      invoice.provider_token,
-      invoice.currency,
-      invoice.prices,
-      {
-        start_parameter: invoice.start_parameter
-      }
-    );
+    await ctx.replyWithInvoice(invoice);
   } catch (error) {
     console.error('Invoice creation error:', error);
     await ctx.reply('❌ Ошибка при выставлении счета. Возможно, платежный провайдер временно недоступен. Свяжитесь с поддержкой для ручной оплаты.');

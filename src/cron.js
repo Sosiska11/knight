@@ -57,18 +57,66 @@ export async function checkExpiredSubscriptions() {
   }
 }
 
+// Function to send warnings 24 hours before expiration
+export async function sendWarningNotifications() {
+  console.log('⏰ Running subscription warning check...');
+  try {
+    const warningList = await db.getExpiringSubscriptions();
+    console.log(`🔍 Found ${warningList.length} active subscriptions expiring in 24 hours.`);
+
+    for (const sub of warningList) {
+      console.log(`⏳ Sending warning notification to user ${sub.tg_id}...`);
+
+      // 1. Notify user in Telegram
+      try {
+        await bot.telegram.sendMessage(
+          sub.tg_id,
+          `
+⚠️ <b>Внимание! Ваша подписка Knight VPN истекает через 24 часа!</b>
+
+Завтра доступ к VPN будет автоматически приостановлен. Чтобы пользоваться VPN без перебоев, вы можете продлить подписку прямо сейчас. При продлении ваш ключ доступа останется прежним!
+
+💳 Нажмите на кнопку ниже, чтобы продлить доступ:
+          `,
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '💳 Продлить доступ', callback_data: 'buy_menu' }],
+                [{ text: '👤 Перейти в профиль', callback_data: 'profile_menu' }]
+              ]
+            }
+          }
+        );
+        console.log(`✉️ Warning notification sent to user ${sub.tg_id}.`);
+        
+        // 2. Mark warning_sent in DB
+        await db.markWarningSent(sub.id);
+      } catch (err) {
+        console.warn(`⚠️ Could not send warning notification to user ${sub.tg_id}:`, err.message);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error during warning check:', error);
+  }
+}
+
 // Setup scheduler: runs every hour
 export function initScheduler() {
   // '0 * * * *' = every hour at minute 0
-  // For testing/development, you can use '*/5 * * * *' (every 5 minutes) or '0 * * * *'
   cron.schedule('0 * * * *', async () => {
     await checkExpiredSubscriptions();
+    await sendWarningNotifications();
   });
   
   console.log('📅 Subscription checker cron job scheduled (hourly).');
   
-  // Run once immediately on startup to catch up on any missed expirations
+  // Run checks once immediately on startup to catch up
   checkExpiredSubscriptions().catch(err => {
     console.error('Initial startup expiry check failed:', err);
+  });
+  
+  sendWarningNotifications().catch(err => {
+    console.error('Initial startup warning check failed:', err);
   });
 }

@@ -71,6 +71,7 @@ export async function initDb() {
       starts_at TEXT,
       expires_at TEXT,
       status TEXT DEFAULT 'active',
+      warning_sent INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(tg_id) REFERENCES users(tg_id)
     )
@@ -88,6 +89,14 @@ export async function initDb() {
       FOREIGN KEY(tg_id) REFERENCES users(tg_id)
     )
   `);
+  
+  // Migration: Add warning_sent column if it doesn't exist (for existing databases)
+  try {
+    await dbRun(`ALTER TABLE subscriptions ADD COLUMN warning_sent INTEGER DEFAULT 0`);
+    console.log('📝 Added warning_sent column to subscriptions table (migration).');
+  } catch (err) {
+    // Ignore error if column already exists
+  }
   
   console.log('✅ Database tables initialized successfully.');
 }
@@ -122,7 +131,7 @@ export async function markTrialUsed(tgId) {
 // Subscription methods
 export async function getActiveSubscription(tgId) {
   return await dbGet(
-    "SELECT * FROM subscriptions WHERE tg_id = ? AND status = 'active' AND datetime(expires_at) > datetime('now', 'localtime')",
+    "SELECT * FROM subscriptions WHERE tg_id = ? AND status = 'active' AND datetime(expires_at) > datetime('now')",
     [tgId]
   );
 }
@@ -142,14 +151,15 @@ export async function createSubscription(tgId, email, uuid, connectionUrl, planN
   const expiresAt = expires.toISOString().replace('T', ' ').substring(0, 19);
 
   await dbRun(
-    `INSERT INTO subscriptions (tg_id, client_email, client_uuid, connection_url, plan_name, starts_at, expires_at, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'active')
+    `INSERT INTO subscriptions (tg_id, client_email, client_uuid, connection_url, plan_name, starts_at, expires_at, status, warning_sent)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0)
      ON CONFLICT(client_email) DO UPDATE SET
        connection_url = excluded.connection_url,
        plan_name = excluded.plan_name,
        starts_at = excluded.starts_at,
        expires_at = excluded.expires_at,
-       status = 'active'`,
+       status = 'active',
+       warning_sent = 0`,
     [tgId, email, uuid, connectionUrl, planName, startsAt, expiresAt]
   );
 
@@ -167,7 +177,7 @@ export async function extendSubscription(tgId, durationDays) {
   const newExpiresAt = currentExpires.toISOString().replace('T', ' ').substring(0, 19);
 
   await dbRun(
-    "UPDATE subscriptions SET expires_at = ?, status = 'active' WHERE id = ?",
+    "UPDATE subscriptions SET expires_at = ?, status = 'active', warning_sent = 0 WHERE id = ?",
     [newExpiresAt, activeSub.id]
   );
 
@@ -202,7 +212,7 @@ export async function getExpiredSubscriptions() {
   return await dbAll(
     `SELECT * FROM subscriptions 
      WHERE status = 'active' 
-     AND datetime(expires_at) <= datetime('now', 'localtime')`
+     AND datetime(expires_at) <= datetime('now')`
   );
 }
 
@@ -213,11 +223,25 @@ export async function deactivateSubscription(id) {
   );
 }
 
+export async function getExpiringSubscriptions() {
+  return await dbAll(
+    `SELECT * FROM subscriptions 
+     WHERE status = 'active' 
+     AND warning_sent = 0
+     AND datetime(expires_at) <= datetime('now', '+1 day')
+     AND datetime(expires_at) > datetime('now')`
+  );
+}
+
+export async function markWarningSent(id) {
+  return await dbRun('UPDATE subscriptions SET warning_sent = 1 WHERE id = ?', [id]);
+}
+
 // Admin / Statistics methods
 export async function getStats() {
   const totalUsers = await dbGet('SELECT COUNT(*) as count FROM users');
   const activeSubscribers = await dbGet(
-    "SELECT COUNT(DISTINCT tg_id) as count FROM subscriptions WHERE status = 'active' AND datetime(expires_at) > datetime('now', 'localtime')"
+    "SELECT COUNT(DISTINCT tg_id) as count FROM subscriptions WHERE status = 'active' AND datetime(expires_at) > datetime('now')"
   );
   const totalEarnings = await dbGet(
     "SELECT SUM(amount) as sum FROM payments WHERE status = 'completed'"
