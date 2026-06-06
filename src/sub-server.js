@@ -23,7 +23,8 @@ app.get('/sub/:uuid', async (req, res) => {
 
     // Set Headers for Hiddify, Shadowrocket, Sing-box, etc.
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Profile-Title', '⚔️ Knight VPN');
+    // Encode unicode emoji safely for Node.js headers using binary/latin1 encoding
+    res.setHeader('Profile-Title', Buffer.from('⚔️ Knight VPN').toString('binary'));
     res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''KnightVPN");
     
     // Shows traffic usage (1 TB total) and expiration date inside Hiddify
