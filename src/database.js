@@ -72,6 +72,7 @@ export async function initDb() {
       expires_at TEXT,
       status TEXT DEFAULT 'active',
       warning_sent INTEGER DEFAULT 0,
+      limit_ip INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(tg_id) REFERENCES users(tg_id)
     )
@@ -94,6 +95,14 @@ export async function initDb() {
   try {
     await dbRun(`ALTER TABLE subscriptions ADD COLUMN warning_sent INTEGER DEFAULT 0`);
     console.log('📝 Added warning_sent column to subscriptions table (migration).');
+  } catch (err) {
+    // Ignore error if column already exists
+  }
+
+  // Migration: Add limit_ip column if it doesn't exist (for existing databases)
+  try {
+    await dbRun(`ALTER TABLE subscriptions ADD COLUMN limit_ip INTEGER DEFAULT 1`);
+    console.log('📝 Added limit_ip column to subscriptions table (migration).');
   } catch (err) {
     // Ignore error if column already exists
   }
@@ -144,29 +153,30 @@ export async function getSubscriptionByUuid(uuid) {
   return await dbGet('SELECT * FROM subscriptions WHERE client_uuid = ?', [uuid]);
 }
 
-export async function createSubscription(tgId, email, uuid, connectionUrl, planName, durationDays) {
+export async function createSubscription(tgId, email, uuid, connectionUrl, planName, durationDays, limitIp = 1) {
   const startsAt = new Date().toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
   const expires = new Date();
   expires.setDate(expires.getDate() + durationDays);
   const expiresAt = expires.toISOString().replace('T', ' ').substring(0, 19);
 
   await dbRun(
-    `INSERT INTO subscriptions (tg_id, client_email, client_uuid, connection_url, plan_name, starts_at, expires_at, status, warning_sent)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0)
+    `INSERT INTO subscriptions (tg_id, client_email, client_uuid, connection_url, plan_name, starts_at, expires_at, status, warning_sent, limit_ip)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)
      ON CONFLICT(client_email) DO UPDATE SET
        connection_url = excluded.connection_url,
        plan_name = excluded.plan_name,
        starts_at = excluded.starts_at,
        expires_at = excluded.expires_at,
        status = 'active',
-       warning_sent = 0`,
-    [tgId, email, uuid, connectionUrl, planName, startsAt, expiresAt]
+       warning_sent = 0,
+       limit_ip = excluded.limit_ip`,
+    [tgId, email, uuid, connectionUrl, planName, startsAt, expiresAt, limitIp]
   );
 
   return await getActiveSubscription(tgId);
 }
 
-export async function extendSubscription(tgId, durationDays) {
+export async function extendSubscription(tgId, durationDays, limitIp = null) {
   const activeSub = await getActiveSubscription(tgId);
   if (!activeSub) {
     return null; // Must create a new subscription instead of extending
@@ -176,9 +186,11 @@ export async function extendSubscription(tgId, durationDays) {
   currentExpires.setDate(currentExpires.getDate() + durationDays);
   const newExpiresAt = currentExpires.toISOString().replace('T', ' ').substring(0, 19);
 
+  const newLimitIp = limitIp !== null ? limitIp : (activeSub.limit_ip || 1);
+
   await dbRun(
-    "UPDATE subscriptions SET expires_at = ?, status = 'active', warning_sent = 0 WHERE id = ?",
-    [newExpiresAt, activeSub.id]
+    "UPDATE subscriptions SET expires_at = ?, status = 'active', warning_sent = 0, limit_ip = ? WHERE id = ?",
+    [newExpiresAt, newLimitIp, activeSub.id]
   );
 
   return await getActiveSubscription(tgId);

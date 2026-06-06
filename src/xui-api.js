@@ -148,9 +148,8 @@ class XuiClient {
   }
 
   // Add client to inbound
-  async addClient(email, uuid = crypto.randomUUID()) {
+  async addClient(email, uuid = crypto.randomUUID(), limitIp = config.XUI_LIMIT_IP) {
     const inboundId = config.XUI_INBOUND_ID;
-    const limitIp = config.XUI_LIMIT_IP;
 
     if (this.mockMode) {
       console.log(`[MOCK] Added client: email=${email}, uuid=${uuid}`);

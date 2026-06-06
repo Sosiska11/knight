@@ -1,34 +1,86 @@
 import config from './config.js';
 
-// Define subscription plans
+// Define subscription plans with duration and device limits
 export const PLANS = {
   trial: {
     id: 'trial',
-    name: 'Пробный VPN (3 дня)',
+    name: 'Пробный (1 устр. / 3 дня)',
     price: 0,
     days: 3,
-    description: 'Тестовый доступ к Knight VPN на 3 дня. Доступен только один раз.'
+    devices: 1,
+    description: 'Тестовый доступ к Knight VPN на 3 дня (1 устройство).'
   },
-  '1month': {
-    id: '1month',
-    name: '1 месяц подписки',
+  '1month_1': {
+    id: '1month_1',
+    name: '1 месяц (1 устр.)',
     price: 150,
     days: 30,
-    description: 'Подписка на быстрый и безопасный Knight VPN на 30 дней.'
+    devices: 1,
+    description: 'Подписка Knight VPN на 30 дней для 1 устройства.'
   },
-  '3months': {
-    id: '3months',
-    name: '3 месяца подписки',
+  '1month_3': {
+    id: '1month_3',
+    name: '1 месяц (3 устр.)',
+    price: 300,
+    days: 30,
+    devices: 3,
+    description: 'Подписка Knight VPN на 30 дней для 3 устройств.'
+  },
+  '1month_5': {
+    id: '1month_5',
+    name: '1 месяц (5 устр.)',
+    price: 450,
+    days: 30,
+    devices: 5,
+    description: 'Подписка Knight VPN на 30  дней для 5 устройств.'
+  },
+  '3months_1': {
+    id: '3months_1',
+    name: '3 месяца (1 устр.)',
     price: 400,
     days: 90,
-    description: 'Подписка на быстрый и безопасный Knight VPN на 90 дней со скидкой.'
+    devices: 1,
+    description: 'Подписка Knight VPN на 90 дней для 1 устройства.'
   },
-  '6months': {
-    id: '6months',
-    name: '6 месяцев подписки',
+  '3months_3': {
+    id: '3months_3',
+    name: '3 месяца (3 устр.)',
+    price: 800,
+    days: 90,
+    devices: 3,
+    description: 'Подписка Knight VPN на 90 дней для 3 устройств.'
+  },
+  '3months_5': {
+    id: '3months_5',
+    name: '3 месяца (5 устр.)',
+    price: 1200,
+    days: 90,
+    devices: 5,
+    description: 'Подписка Knight VPN на 90 дней для 5 устройств.'
+  },
+  '6months_1': {
+    id: '6months_1',
+    name: '6 месяцев (1 устр.)',
     price: 750,
     days: 180,
-    description: 'Подписка на быстрый и безопасный Knight VPN на 180 дней с максимальной выгодой.'
+    devices: 1,
+    description: 'Подписка Knight VPN на 180 дней для 1 устройства.'
+  },
+  '6months_3': {
+    id: '6months_3',
+    name: '6 месяцев (3 устр.)',
+    price: 1500,
+    days: 180,
+    devices: 3,
+    description: 'Подписка Knight VPN на 180 дней для 3 устройств.'
+  },
+  '6months_5': {
+    id: '6months_5',
+    name: '6 месяцев (5 устр.)',
+    price: 2200,
+    days: 180,
+    devices: 5,
+    description: 'Подписка Knight VPN на 180 дней для 5 устройств.'
   }
 };
 

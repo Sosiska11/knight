@@ -41,6 +41,8 @@ if (mockXui) {
   console.log('ℹ️ Running in MOCK 3x-ui mode. Dummy VPN keys will be generated without calling the real panel.');
 }
 
+const botBanner = process.env.BOT_BANNER || 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80';
+
 export default {
   BOT_TOKEN: botToken,
   ADMIN_TG_IDS: adminTgIds,
@@ -54,4 +56,5 @@ export default {
   DATABASE_FILE: databaseFile,
   SUB_SERVER_URL: subServerUrl,
   SUB_PORT: subPort,
+  BOT_BANNER: botBanner,
 };

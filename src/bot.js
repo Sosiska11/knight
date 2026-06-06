@@ -1,4 +1,5 @@
 import { Telegraf, Markup } from 'telegraf';
+import crypto from 'crypto';
 import config from './config.js';
 import * as db from './database.js';
 import xuiApi from './xui-api.js';
@@ -18,65 +19,102 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-// Helper for check admin access
+// Helper to check admin access
 function isAdmin(tgId) {
   return config.ADMIN_TG_IDS.includes(tgId);
 }
 
-// Generate Main Menu Keyboard
+// Helper to either edit existing photo message caption or send a new photo message
+async function sendOrEditMessage(ctx, text, replyMarkup) {
+  const isCallback = !!ctx.callbackQuery;
+  const hasPhoto = ctx.callbackQuery && ctx.callbackQuery.message && ctx.callbackQuery.message.photo;
+  
+  if (isCallback && hasPhoto) {
+    try {
+      await ctx.editMessageCaption(text, {
+        parse_mode: 'HTML',
+        reply_markup: replyMarkup
+      });
+      return;
+    } catch (err) {
+      // If no change or other error, fallback to sending new message
+      console.log('Error in editMessageCaption, sending new message:', err.message);
+    }
+  }
+  
+  // Try to delete the user's incoming message to keep the chat tidy
+  if (ctx.message && ctx.chat) {
+    try {
+      await ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+    } catch (e) {}
+  }
+  
+  await ctx.replyWithPhoto(config.BOT_BANNER, {
+    caption: text,
+    parse_mode: 'HTML',
+    reply_markup: replyMarkup
+  });
+}
+
+// Generate Main Menu Keyboard (Inline)
 function getMainMenuKeyboard(tgId) {
   const buttons = [
-    ['👤 Мой профиль', '💳 Оформить доступ'],
-    ['⚙️ Инструкция по авторизации', '🆘 Поддержка']
+    [
+      { text: '👤 Мой профиль', callback_data: 'show_profile' },
+      { text: '💳 Купить подписку', callback_data: 'show_buy_menu' }
+    ],
+    [
+      { text: '⚙️ Инструкция', callback_data: 'show_instructions' },
+      { text: '🆘 Поддержка', callback_data: 'show_support' }
+    ]
   ];
   if (isAdmin(tgId)) {
-    buttons.push(['👑 Админ-панель']);
+    buttons.push([{ text: '👑  Админ-панель', callback_data: 'show_admin_panel' }]);
   }
-  return Markup.keyboard(buttons).resize();
+  return { inline_keyboard: buttons };
+}
+
+// Send Main Menu
+async function sendMainMenu(ctx) {
+  const name = ctx.from.first_name || 'друг';
+  const welcomeText = `👋 <b>Привет, ${name}!</b>\n\n` +
+    `🛡 <b>Наш сервис предоставляет:</b>\n` +
+    `• Высокоскоростной и стабильный доступ без каких-либо блокировок\n` +
+    `• Современный и незаметный протокол шифрования <b>VLESS Reality</b>\n` +
+    `• Безлимитный трафик на максимальной скорости\n` +
+    `• Поддержку всех ваших устройств (iOS, Android, Windows, macOS)\n` +
+    `• Удобное подключение за 1 минуту через приложение <b>Happ</b>\n\n` +
+    `🎁 Для новых пользователей доступен <b>бесплатный пробный период на 3 дня</b>!\n` +
+    `Перейдите в раздел 👤 <b>Мой профиль</b>, чтобы активировать его.`;
+
+  await sendOrEditMessage(ctx, welcomeText, getMainMenuKeyboard(ctx.from.id));
 }
 
 // Command /start
 bot.start(async (ctx) => {
-  const name = ctx.from.first_name || 'друг';
-  const welcomeText = `
-👋 <b>Привет, ${name}!</b>
-
-Добро пожаловать в бот <b>Knight VPN</b>! 🚀
-
-🛡 <b>Наш сервис предоставляет:</b>
-• Высокоскоростной и стабильный доступ без каких-либо блокировок
-• Современный и незаметный протокол шифрования <b>VLESS Reality</b>
-• Безлимитный трафик на максимальной скорости
-• Поддержку всех ваших устройств (iOS, Android, Windows, macOS)
-• Удобное подключение за 1 минуту через приложение <b>Happ</b>
-
-🎁 Для новых пользователей доступен <b>бесплатный пробный период на 3 дня</b>!
-Перейдите в раздел 👤 <b>Мой профиль</b>, чтобы активировать его.
-  `;
-
-  await ctx.reply(welcomeText, {
-    parse_mode: 'HTML',
-    ...getMainMenuKeyboard(ctx.from.id)
-  });
+  // Try to remove old reply keyboard if the user has one
+  try {
+    const msg = await ctx.reply('Загрузка меню...', {
+      reply_markup: { remove_keyboard: true }
+    });
+    await ctx.deleteMessage(msg.message_id).catch(() => {});
+  } catch (e) {}
+  
+  await sendMainMenu(ctx);
 });
 
-// Handler for "👤 Мой профиль"
-bot.hears('👤 Мой профиль', async (ctx) => {
-  await showProfile(ctx);
-});
-
+// Show User Profile
 async function showProfile(ctx) {
   const tgId = ctx.from.id;
   const user = await db.getUser(tgId);
   const activeSub = await db.getActiveSubscription(tgId);
 
-  let profileText = `👤 <b>Ваш профиль:</b>\n`;
-  profileText += `• <b>ID:</b> <code>${tgId}</code>\n`;
+  let profileText = `👤 <b>Ваш профиль:</b>\n\n`;
+  profileText += `• <b>Ваш Telegram ID:</b> <code>${tgId}</code>\n`;
   
-  const inlineButtons = [];
+  const buttons = [];
 
   if (activeSub) {
-    // Format expiration date
     const expiryDate = new Date(activeSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU', {
       timeZone: 'Europe/Moscow',
       day: '2-digit',
@@ -86,187 +124,84 @@ async function showProfile(ctx) {
       minute: '2-digit'
     });
     
-    profileText += `• <b>Статус доступа:</b> ✅ Активен\n`;
-    profileText += `• <b>Тариф:</b> ${activeSub.plan_name}\n`;
-    profileText += `• <b>Действует до (МСК):</b> <code>${expiryDate}</code>\n\n`;
+    profileText += `• <b>Статус подписки:</b> ✅ Активна\n`;
+    profileText += `• <b>Тарифный план:</b> ${activeSub.plan_name}\n`;
+    profileText += `• <b>Лимит устройств:</b> ${activeSub.limit_ip || 1} шт.\n`;
+    profileText += `• <b>Активна до (МСК):</b> <code>${expiryDate}</code>\n\n`;
     profileText += `📥 Ваш персональный ключ доступа к Knight VPN готов. Нажмите на кнопку ниже, чтобы получить его.`;
 
-    inlineButtons.push([Markup.button.callback('🔑 Получить ключ доступа', 'get_key')]);
-    inlineButtons.push([Markup.button.callback('🔄 Продлить подписку', 'buy_menu')]);
+    buttons.push([{ text: '🔑 Получить ключ доступа', callback_data: 'get_key' }]);
+    buttons.push([{ text: '🔄 Продлить подписку', callback_data: 'show_buy_menu' }]);
   } else {
-    profileText += `• <b>Статус доступа:</b> ❌ Неактивен\n\n`;
+    profileText += `• <b>Статус подписки:</b> ❌ Неактивна\n\n`;
     
     if (user && !user.trial_used) {
-      profileText += `🎁 Вам доступен бесплатный пробный доступ на 3 дня!`;
-      inlineButtons.push([Markup.button.callback('🎁 Активировать тест (3 дня)', 'activate_trial')]);
+      profileText += `🎁 Вам доступен бесплатный пробный период на 3 дня!`;
+      buttons.push([{ text: '🎁 Активировать тест (3 дня)', callback_data: 'activate_trial' }]);
     } else {
-      profileText += `Для подключения к VPN, пожалуйста, оформите подписку.`;
+      profileText += `Для подключения к VPN, пожалуйста, приобретите подписку.`;
     }
     
-    inlineButtons.push([Markup.button.callback('💳 Оформить подписку', 'buy_menu')]);
+    buttons.push([{ text: '💳 Купить подписку', callback_data: 'show_buy_menu' }]);
   }
-
-  await ctx.reply(profileText, {
-    parse_mode: 'HTML',
-    ...Markup.inlineKeyboard(inlineButtons)
-  });
-}
-
-// Callback for getting VPN key
-bot.action('get_key', async (ctx) => {
-  const tgId = ctx.from.id;
-  const activeSub = await db.getActiveSubscription(tgId);
-
-  if (!activeSub) {
-    return ctx.answerCbQuery('У вас нет активного доступа!', { show_alert: true });
-  }
-
-  await ctx.answerCbQuery();
   
-  const keyText = `
-🔑 <b>Ваш персональный ключ доступа к Knight VPN (подписка):</b>
-<code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
+  buttons.push([{ text: '🔙 Главное меню', callback_data: 'back_to_main' }]);
 
-<i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
-
-⚙️ <b>Быстрая настройка через Happ (рекомендуется):</b>
-1. Установите приложение <b>Happ</b> (ссылки для скачивания в разделе «⚙️ Инструкция по авторизации»)
-2. Скопируйте вашу ссылку подписки выше
-3. Откройте приложение, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
-4. Выберите <b>«Добавить из буфера обмена»</b>
-5. Нажмите кнопку подключения в центре экрана
-
-<i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>
-  `;
-
-  const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
-    [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
-  ]);
-
-  await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
-});
-
-// Callback for getting static VLESS key
-bot.action('get_static_key', async (ctx) => {
-  const tgId = ctx.from.id;
-  const activeSub = await db.getActiveSubscription(tgId);
-
-  if (!activeSub) {
-    return ctx.answerCbQuery('У вас нет активного доступа!', { show_alert: true });
-  }
-
-  await ctx.answerCbQuery();
-
-  const keyText = `
-🔑 <b>Ваш статический ключ доступа (VLESS):</b>
-<code>${activeSub.connection_url}</code>
-
-<i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>
-
-⚠️ <i>Используйте этот статический ключ только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок. Для автоматического обновления конфигурации и удобного просмотра срока действия подписки рекомендуем использовать приложение Happ со ссылкой для подписки.</i>
-  `;
-
-  await ctx.reply(keyText, { parse_mode: 'HTML' });
-});
-
-
-// Callback for activating trial
-bot.action('activate_trial', async (ctx) => {
-  const tgId = ctx.from.id;
-  const user = await db.getUser(tgId);
-
-  if (user && user.trial_used) {
-    return ctx.answerCbQuery('Вы уже использовали пробный доступ!', { show_alert: true });
-  }
-
-  await ctx.answerCbQuery('Активируем тест...');
-  await ctx.reply('⏳ Секунду, генерируем персональный ключ доступа...');
-
-  try {
-    const email = `vpn_user_${tgId}`;
-    // Add client to 3x-ui
-    const client = await xuiApi.addClient(email);
-
-    if (client.error && !xuiApi.mockMode) {
-      throw new Error(client.error);
-    }
-
-    // Save subscription in DB
-    await db.createSubscription(
-      tgId,
-      client.email,
-      client.uuid,
-      client.connectionUrl,
-      PLANS.trial.name,
-      PLANS.trial.days
-    );
-
-    // Mark trial as used
-    await db.markTrialUsed(tgId);
-
-    const keyText = `
-🎉 <b>Пробный доступ успешно активирован!</b>
-
-Доступ к Knight VPN предоставлен на 3 дня.
-🔑 <b>Ваш персональный ключ доступа (подписка):</b>
-<code>${config.SUB_SERVER_URL}/sub/${client.uuid}</code>
-
-<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
-    `;
-    const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
-    const keyboard = Markup.inlineKeyboard([
-      [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
-      [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')]
-    ]);
-    await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
-  } catch (error) {
-    console.error('Trial activation error:', error);
-    await ctx.reply('❌ Произошла ошибка при создании ключа доступа. Пожалуйста, обратитесь в поддержку.');
-  }
-});
-
-// Handler for "💳 Оформить доступ" or "buy_menu" callback
-bot.hears('💳 Оформить доступ', async (ctx) => {
-  await showBuyMenu(ctx);
-});
-
-bot.action('buy_menu', async (ctx) => {
-  await ctx.answerCbQuery();
-  await showBuyMenu(ctx);
-});
-
-bot.action('profile_menu', async (ctx) => {
-  await ctx.answerCbQuery();
-  await showProfile(ctx);
-});
-
-async function showBuyMenu(ctx) {
-  const plansText = `
-💳 <b>Выберите длительность подписки Knight VPN:</b>
-
-• <b>1 месяц подписки</b> — 150 ₽
-• <b>3 месяца подписки</b> — 400 ₽ <i>(выгода 50 ₽)</i>
-• <b>6 месяцев подписки</b> — 750 ₽ <i>(выгода 150 ₽)</i>
-
-<i>Подписка активируется автоматически после подтверждения транзакции.</i>
-  `;
-
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('1 месяц — 150 ₽', 'buy_1month')],
-    [Markup.button.callback('3 месяца — 400 ₽', 'buy_3months')],
-    [Markup.button.callback('6 месяцев — 750 ₽', 'buy_6months')],
-  ]);
-
-  await ctx.reply(plansText, {
-    parse_mode: 'HTML',
-    ...keyboard
-  });
+  await sendOrEditMessage(ctx, profileText, { inline_keyboard: buttons });
 }
 
-// Payment generation callbacks
-const buyPlanAction = (planId) => async (ctx) => {
+// Show Buy Menu (Select Duration)
+async function showBuyMenu(ctx) {
+  const text = `💳 <b>Выберите длительность подписки Knight VPN:</b>\n\n` +
+    `Выберите подходящий период действия подписки. На следующем шаге вы сможете настроить количество необходимых устройств.`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '📅 1 месяц', callback_data: 'buy_dur:1month' },
+        { text: '📅 3 месяца', callback_data: 'buy_dur:3months' }
+      ],
+      [
+        { text: '📅 6 месяцев', callback_data: 'buy_dur:6months' }
+      ],
+      [
+        { text: '🔙 Главное меню', callback_data: 'back_to_main' }
+      ]
+    ]
+  };
+
+  await sendOrEditMessage(ctx, text, keyboard);
+}
+
+// Show Device Selection for a chosen duration
+async function showDeviceSelect(ctx, duration) {
+  let durationText = '';
+  if (duration === '1month') durationText = '1 месяц';
+  else if (duration === '3months') durationText = '3 месяца';
+  else if (duration === '6months') durationText = '6 месяцев';
+
+  const text = `📱 <b>Тариф на ${durationText}</b>\n\n` +
+    `Выберите количество устройств для одновременного подключения:`;
+
+  const plansForDuration = Object.keys(PLANS)
+    .filter(key => key.startsWith(duration + '_'))
+    .map(key => PLANS[key]);
+
+  const buttons = [];
+  plansForDuration.forEach(plan => {
+    buttons.push([{
+      text: `${plan.devices} ${plan.devices === 1 ? 'устройство' : plan.devices === 3 ? 'устройства' : 'устройств'} — ${plan.price} ₽`,
+      callback_data: `buy_select:${plan.id}`
+    }]);
+  });
+  
+  buttons.push([{ text: '🔙 Назад к выбору срока', callback_data: 'show_buy_menu' }]);
+
+  await sendOrEditMessage(ctx, text, { inline_keyboard: buttons });
+}
+
+// Action to handle plan selection (generate invoice / manual details)
+const buyPlanAction = async (ctx, planId) => {
   const tgId = ctx.from.id;
   const plan = PLANS[planId];
   
@@ -275,18 +210,18 @@ const buyPlanAction = (planId) => async (ctx) => {
   // Fallback to manual payment if YOOKASSA_TOKEN is not set
   if (!config.YOOKASSA_TOKEN || config.YOOKASSA_TOKEN === 'YOUR_YOOKASSA_PROVIDER_TOKEN') {
     await ctx.answerCbQuery();
-    const manualPaymentText = `
-💳 <b>Реквизиты для оплаты доступа «${plan.name}»:</b>
+    const manualPaymentText = `💳 <b>Оплата тарифа «${plan.name}»:</b>\n\n` +
+      `• <b>Сумма к оплате:</b> <code>${plan.price} ₽</code>\n` +
+      `• <b>Лимит устройств:</b> ${plan.devices} шт.\n` +
+      `• <b>Способ оплаты:</b> Перевод на карту или СБП\n` +
+      `• <b>Реквизиты:</b> <code>[Здесь будут указаны ваши реквизиты]</code>\n\n` +
+      `После оплаты, пожалуйста, отправьте скриншот чека/квитанции администратору: @alexs_vpn_admin\n\n` +
+      `После подтверждения администратор сразу активирует ваш доступ. Пожалуйста, укажите ваш Telegram ID: <code>${tgId}</code> в сообщении с чеком.`;
 
-• <b>Сумма к оплате:</b> <code>${plan.price} ₽</code>
-• <b>Способ оплаты:</b> Перевод на карту или СБП
-• <b>Реквизиты:</b> <code>[Здесь будут указаны ваши реквизиты]</code>
-
-После оплаты, пожалуйста, пришлите скриншот чека в поддержку: @alexs_vpn_admin <i>(замените ник в src/bot.js на ваш)</i>.
-
-После подтверждения администратор сразу активирует вашу подписку!
-    `;
-    return ctx.reply(manualPaymentText, { parse_mode: 'HTML' });
+    const backButton = {
+      inline_keyboard: [[{ text: '🔙 Назад', callback_data: `buy_dur:${planId.split('_')[0]}` }]]
+    };
+    return sendOrEditMessage(ctx, manualPaymentText, backButton);
   }
   
   await ctx.answerCbQuery('Создаем счет...');
@@ -303,27 +238,433 @@ const buyPlanAction = (planId) => async (ctx) => {
     
     await db.createPayment(tgId, paymentId, plan.price, planId);
     
-    // Send invoice
+    // Inform user in the same message that invoice has been sent below
+    const statusText = `💳 <b>Счет на оплату тарифа «${plan.name}» сформирован!</b>\n\n` +
+      `Пожалуйста, произведите оплату с помощью счета, отправленного ниже. После успешной оплаты ваша подписка активируется/продлится автоматически.`;
+
+    const backButton = {
+      inline_keyboard: [[{ text: '🔙 Выбор устройств', callback_data: `buy_dur:${planId.split('_')[0]}` }]]
+    };
+    
+    await sendOrEditMessage(ctx, statusText, backButton);
+    
+    // Send invoice as a new message
     await ctx.replyWithInvoice(invoice);
   } catch (error) {
     console.error('Invoice creation error:', error);
-    await ctx.reply('❌ Ошибка при выставлении счета. Возможно, платежный провайдер временно недоступен. Свяжитесь с поддержкой для ручной оплаты.');
+    await ctx.answerCbQuery('Ошибка создания счета');
+    await sendOrEditMessage(ctx, '❌ Произошла ошибка при выставлении счета. Обратитесь к администратору.', {
+      inline_keyboard: [[{ text: '🔙 Назад', callback_data: 'show_buy_menu' }]]
+    });
   }
 };
 
-bot.action('buy_1month', buyPlanAction('1month'));
-bot.action('buy_3months', buyPlanAction('3months'));
-bot.action('buy_6months', buyPlanAction('6months'));
+// Show Instructions Menu
+async function showInstructions(ctx) {
+  const instructionsText = `⚙️ <b>Инструкция по подключению к Knight VPN</b>\n\n` +
+    `Выберите вашу операционную систему / устройство для настройки подключения:`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '🍏 iOS (iPhone/iPad)', callback_data: 'inst_ios' },
+        { text: '🤖 Android', callback_data: 'inst_android' }
+      ],
+      [
+        { text: '💻 Windows', callback_data: 'inst_windows' },
+        { text: '🍎 macOS', callback_data: 'inst_macos' }
+      ],
+      [
+        { text: '🔙 Главное меню', callback_data: 'back_to_main' }
+      ]
+    ]
+  };
+
+  await sendOrEditMessage(ctx, instructionsText, keyboard);
+}
+
+// Show specific OS instructions
+const showInstruction = (os) => async (ctx) => {
+  await ctx.answerCbQuery();
+
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+  const subUrl = activeSub ? `${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}` : null;
+  const autoImportUrl = subUrl ? `sing-box://import-remote?url=${encodeURIComponent(subUrl)}` : null;
+  const autoImportRedirectUrl = activeSub ? `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}` : null;
+
+  let text = '';
+  let inlineKeyboard = [];
+  
+  if (os === 'ios') {
+    text = `🍏 <b>Подключение на iOS (iPhone, iPad)</b>\n\n` +
+      `1️⃣ <b>Установите приложение Happ:</b>\n` +
+      `Нажмите кнопку <b>«Скачать из App Store»</b> ниже.\n\n` +
+      `2️⃣ <b>Добавьте подписку:</b>\n` +
+      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
+      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
+      `<i>Если авто-импорт не сработал:</i>\n` +
+      `• Скопируйте ссылку подписки вручную из раздела «👤 Мой профиль».\n` +
+      `• Откройте <b>Happ</b>, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта) и выберите <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
+      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
+      `3️⃣ <b>Подключитесь:</b>\n` +
+      `Нажмите круглую кнопку в центре экрана для запуска VPN. Разрешите системе добавить конфигурацию VPN.\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `<i>Приложение будет автоматически обновлять конфигурации.</i>`;
+
+    inlineKeyboard.push([{ text: '📥 App Store', url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215' }]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
+    }
+    inlineKeyboard.push([
+      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
+      { text: '🔙 Назад', callback_data: 'show_instructions' }
+    ]);
+
+  } else if (os === 'android') {
+    text = `🤖 <b>Подключение на Android</b>\n\n` +
+      `1️⃣ <b>Установите приложение Sing-box (совместимое с Happ):</b>\n` +
+      `Установите из <b>Google Play</b> или скачайте <b>APK-файл</b> напрямую с GitHub по кнопкам ниже.\n\n` +
+      `2️⃣ <b>Добавьте подписку:</b>\n` +
+      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
+      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
+      `<i>Если авто-импорт не сработал:</i>\n` +
+      `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
+      `• В приложении нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
+      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
+      `3️⃣ <b>Подключитесь:</b>\n` +
+      `Нажмите кнопку включения в центре экрана приложения и подтвердите создание VPN-подключения в системном запросе Android.\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `<i>Подходит для любых Android-смартфонов, планшетов и Android TV.</i>`;
+
+    inlineKeyboard.push([
+      { text: '📥 Google Play', url: 'https://play.google.com/store/apps/details?id=io.nekohasekai.sfa' },
+      { text: '📥 APK с GitHub', url: 'https://github.com/SagerNet/sing-box/releases' }
+    ]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
+    }
+    inlineKeyboard.push([
+      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
+      { text: '🔙 Назад', callback_data: 'show_instructions' }
+    ]);
+
+  } else if (os === 'windows') {
+    text = `💻 <b>Подключение на Windows</b>\n\n` +
+      `1️⃣ <b>Скачайте Sing-box для Windows (совместимый с Happ):</b>\n` +
+      `Нажмите кнопку <b>«📥 Скачать для Windows»</b> ниже для перехода к релизам программы.\n\n` +
+      `2️⃣ <b>Добавьте подписку:</b>\n` +
+      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
+      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
+      `<i>Если авто-импорт не сработал:</i>\n` +
+      `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
+      `• В программе добавьте новый профиль из буфера обмена.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
+      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
+      `3️⃣ <b>Подключитесь:</b>\n` +
+      `Запустите созданный профиль в программе.\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `<i>При первом запуске брандмауэр Windows может запросить разрешение — подтвердите его.</i>`;
+
+    inlineKeyboard.push([{ text: '📥 Скачать для Windows (.exe)', url: 'https://github.com/SagerNet/sing-box/releases' }]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
+    }
+    inlineKeyboard.push([
+      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
+      { text: '🔙 Назад', callback_data: 'show_instructions' }
+    ]);
+
+  } else if (os === 'macos') {
+    text = `🍎 <b>Подключение на macOS</b>\n\n` +
+      `1️⃣ <b>Установите приложение Happ:</b>\n` +
+      `Скачайте из App Store по кнопке ниже.\n\n` +
+      `2️⃣ <b>Добавьте подписку:</b>\n` +
+      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
+      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
+      `<i>Если авто-импорт не сработал:</i>\n` +
+      `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
+      `• В программе <b>Happ</b> нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
+      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
+      `3️⃣ <b>Подключитесь:</b>\n` +
+      `Нажмите кнопку включения в программе для запуска VPN.\n\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `<i>Рекомендуется использовать официальное приложение Happ для автоматического обновления профилей.</i>`;
+
+    inlineKeyboard.push([
+      { text: '📥 App Store', url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215' }
+    ]);
+    if (autoImportRedirectUrl) {
+      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
+    }
+    inlineKeyboard.push([
+      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
+      { text: '🔙 Назад', callback_data: 'show_instructions' }
+    ]);
+  }
+
+  await sendOrEditMessage(ctx, text, { inline_keyboard: inlineKeyboard });
+};
+
+// Show Support Info
+async function showSupport(ctx) {
+  const supportText = `🆘 <b>Служба поддержки Knight VPN</b>\n\n` +
+    `Если у вас возникли вопросы по оплате, настройке или работе VPN — напишите администратору:\n\n` +
+    `👨‍💻 <b>Контакты администратора:</b> @alexs_vpn_admin\n\n` +
+    `Опишите вашу проблему, указав ваш ID: <code>${ctx.from.id}</code>`;
+
+  const keyboard = {
+    inline_keyboard: [[{ text: '🔙 Главное меню', callback_data: 'back_to_main' }]]
+  };
+
+  await sendOrEditMessage(ctx, supportText, keyboard);
+}
+
+// Show Admin Panel Info
+async function showAdminPanel(ctx) {
+  const stats = await db.getStats();
+  const adminText = `👑 <b>Панель администратора:</b>\n\n` +
+    `📊 <b>Статистика:</b>\n` +
+    `• Всего пользователей: <code>${stats.totalUsers}</code>\n` +
+    `• Активных участников: <code>${stats.activeSubscribers}</code>\n` +
+    `• Всего заработано: <code>${stats.totalEarnings} ₽</code>\n\n` +
+    `📝 <b>Команды управления:</b>\n` +
+    `• <code>/give [id] [days]</code> — Предоставить/продлить доступ пользователю на X дней.\n` +
+    `  Пример: <code>/give 123456789 30</code>\n` +
+    `• <code>/broadcast [текст]</code> — Отправить сообщение всем участникам.\n` +
+    `  Пример: <code>/broadcast Внимание! Проводятся технические работы.</code>`;
+
+  const keyboard = {
+    inline_keyboard: [[{ text: '🔙 Главное меню', callback_data: 'back_to_main' }]]
+  };
+
+  await sendOrEditMessage(ctx, adminText, keyboard);
+}
+
+// --- CALLBACK ACTIONS ---
+bot.action(['show_profile', 'profile_menu'], async (ctx) => {
+  await ctx.answerCbQuery();
+  await showProfile(ctx);
+});
+
+bot.action(['show_buy_menu', 'buy_menu'], async (ctx) => {
+  await ctx.answerCbQuery();
+  await showBuyMenu(ctx);
+});
+
+bot.action('show_instructions', async (ctx) => {
+  await ctx.answerCbQuery();
+  await showInstructions(ctx);
+});
+
+bot.action('show_support', async (ctx) => {
+  await ctx.answerCbQuery();
+  await showSupport(ctx);
+});
+
+bot.action('show_admin_panel', async (ctx) => {
+  await ctx.answerCbQuery();
+  await showAdminPanel(ctx);
+});
+
+bot.action('back_to_main', async (ctx) => {
+  await ctx.answerCbQuery();
+  await sendMainMenu(ctx);
+});
+
+bot.action('get_key', async (ctx) => {
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+
+  if (!activeSub) {
+    return ctx.answerCbQuery('У вас нет активной подписки!', { show_alert: true });
+  }
+
+  await ctx.answerCbQuery();
+  
+  const keyText = `🔑 <b>Ваша персональная ссылка для подписки:</b>
+<code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
+
+<i>Нажмите на ссылку выше, чтобы скопировать её.</i>
+
+⚙️ <b>Быстрая настройка через Happ (рекомендуется):</b>
+1. Установите приложение <b>Happ</b> (ссылки для скачивания в разделе «⚙️ Инструкция»)
+2. Скопируйте вашу ссылку подписки выше
+3. Откройте приложение, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
+4. Выберите <b>«Добавить из буфера обмена»</b>
+5. Нажмите кнопку подключения в центре экрана
+
+<i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>`;
+
+  const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '⚡️ Установить в Happ', url: autoImportRedirectUrl }],
+      [{ text: '🔑 Получить статический ключ (VLESS)', callback_data: 'get_static_key' }],
+      [{ text: '🔙 Назад в профиль', callback_data: 'show_profile' }]
+    ]
+  };
+
+  await sendOrEditMessage(ctx, keyText, keyboard);
+});
+
+bot.action('get_key_from_inst', async (ctx) => {
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+
+  if (!activeSub) {
+    return ctx.answerCbQuery('У вас нет активной подписки!', { show_alert: true });
+  }
+
+  await ctx.answerCbQuery();
+  
+  const keyText = `🔑 <b>Ваша персональная ссылка для подписки:</b>
+<code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
+
+<i>Нажмите на ссылку выше, чтобы скопировать её.</i>
+
+⚙️ <b>Быстрая настройка через Happ (рекомендуется):</b>
+1. Установите приложение <b>Happ</b> (ссылки для скачивания в разделе «⚙️ Инструкция»)
+2. Скопируйте вашу ссылку подписки выше
+3. Откройте приложение, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
+4. Выберите <b>«Добавить из буфера обмена»</b>
+5. Нажмите кнопку подключения в центре экрана
+
+<i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>`;
+
+  const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '⚡️ Установить в Happ', url: autoImportRedirectUrl }],
+      [{ text: '🔑 Получить статический ключ (VLESS)', callback_data: 'get_static_key' }],
+      [{ text: '🔙 Назад к инструкциям', callback_data: 'show_instructions' }]
+    ]
+  };
+
+  await sendOrEditMessage(ctx, keyText, keyboard);
+});
+
+bot.action('get_static_key', async (ctx) => {
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+
+  if (!activeSub) {
+    return ctx.answerCbQuery('У вас нет активного доступа!', { show_alert: true });
+  }
+
+  await ctx.answerCbQuery();
+
+  const keyText = `🔑 <b>Ваш статический ключ доступа (VLESS):</b>
+<code>${activeSub.connection_url}</code>
+
+<i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>
+
+⚠️ <i>Используйте этот статический ключ только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок.</i>`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '🔙 Назад к ссылке подписки', callback_data: 'get_key' }]
+    ]
+  };
+
+  await sendOrEditMessage(ctx, keyText, keyboard);
+});
+
+bot.action('activate_trial', async (ctx) => {
+  const tgId = ctx.from.id;
+  const user = await db.getUser(tgId);
+
+  if (user && user.trial_used) {
+    return ctx.answerCbQuery('Вы уже использовали пробный доступ!', { show_alert: true });
+  }
+
+  await ctx.answerCbQuery('Активация пробного периода...');
+  
+  await sendOrEditMessage(ctx, '⏳ Секунду, создаем ваш профиль на сервере...', { inline_keyboard: [] });
+
+  try {
+    const email = `vpn_user_${tgId}`;
+    const client = await xuiApi.addClient(email);
+
+    if (client.error && !xuiApi.mockMode) {
+      throw new Error(client.error);
+    }
+
+    await db.createSubscription(
+      tgId,
+      client.email,
+      client.uuid,
+      client.connectionUrl,
+      PLANS.trial.name,
+      PLANS.trial.days,
+      PLANS.trial.devices
+    );
+
+    await db.markTrialUsed(tgId);
+
+    const keyText = `🎉 <b>Пробный доступ успешно активирован!</b>
+
+Доступ к Knight VPN предоставлен на 3 дня (1 устройство).
+
+🔑 <b>Ваша ссылка для подписки:</b>
+<code>${config.SUB_SERVER_URL}/sub/${client.uuid}</code>
+
+<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция».</i>`;
+
+    const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: '⚡️ Установить в Happ', url: autoImportRedirectUrl }],
+        [{ text: '🔑 Получить статический ключ', callback_data: 'get_static_key' }],
+        [{ text: '🔙 В профиль', callback_data: 'show_profile' }]
+      ]
+    };
+    await sendOrEditMessage(ctx, keyText, keyboard);
+  } catch (error) {
+    console.error('Trial activation error:', error);
+    await sendOrEditMessage(ctx, '❌ Произошла ошибка при создании ключа доступа. Пожалуйста, обратитесь в поддержку.', {
+      inline_keyboard: [[{ text: '🔙 Назад', callback_data: 'show_profile' }]]
+    });
+  }
+});
+
+bot.action(/^buy_dur:(.+)$/, async (ctx) => {
+  await ctx.answerCbQuery();
+  const duration = ctx.match[1];
+  await showDeviceSelect(ctx, duration);
+});
+
+bot.action(/^buy_select:(.+)$/, async (ctx) => {
+  const planId = ctx.match[1];
+  await buyPlanAction(ctx, planId);
+});
+
+// Retro-compatibility with old buttons in telegram client
+bot.hears('👤 Мой профиль', async (ctx) => {
+  await showProfile(ctx);
+});
+
+bot.hears('💳 Оформить доступ', async (ctx) => {
+  await showBuyMenu(ctx);
+});
+
+bot.hears('⚙️ Инструкция по авторизации', async (ctx) => {
+  await showInstructions(ctx);
+});
+
+bot.hears('🆘 Поддержка', async (ctx) => {
+  await showSupport(ctx);
+});
+
+bot.hears('👑  Админ-панель', async (ctx) => {
+  if (!isAdmin(ctx.from.id)) return;
+  await showAdminPanel(ctx);
+});
 
 // --- TELEGRAM PAYMENTS HANDLERS ---
 
-// 1. PreCheckout - answer within 10 seconds
 bot.on('pre_checkout_query', async (ctx) => {
-  const preCheckoutQueryId = ctx.preCheckoutQuery.id;
   const paymentId = ctx.preCheckoutQuery.invoice_payload;
-  
   console.log(`💳 PreCheckout Query received for: ${paymentId}`);
-  
   try {
     await ctx.answerPreCheckoutQuery(true);
   } catch (error) {
@@ -332,7 +673,6 @@ bot.on('pre_checkout_query', async (ctx) => {
   }
 });
 
-// 2. SuccessfulPayment
 bot.on('successful_payment', async (ctx) => {
   const paymentInfo = ctx.message.successful_payment;
   const paymentId = paymentInfo.invoice_payload;
@@ -341,74 +681,62 @@ bot.on('successful_payment', async (ctx) => {
   console.log(`✅ Successful Payment received: ${paymentId} from user ${tgId}`);
 
   try {
-    // Complete payment in DB
     const dbPayment = await db.completePayment(paymentId);
     if (!dbPayment) {
       console.error(`Warning: payment ${paymentId} was completed but not found in DB.`);
     }
 
-    const planId = dbPayment ? dbPayment.plan_id : '1month'; // Fallback to 1 month if not found
-    const plan = PLANS[planId] || PLANS['1month'];
+    const planId = dbPayment ? dbPayment.plan_id : '1month_1';
+    const plan = PLANS[planId] || PLANS['1month_1'];
 
-    // Check if user already has an active subscription
     const activeSub = await db.getActiveSubscription(tgId);
     let updatedSub;
 
     if (activeSub) {
-      // Extend existing subscription
-      updatedSub = await db.extendSubscription(tgId, plan.days);
-      
-      // Since it's active now, we add it back. If it's a real panel, it will restore access.
-      await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid);
+      updatedSub = await db.extendSubscription(tgId, plan.days, plan.devices);
+      await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, updatedSub.limit_ip || plan.devices);
 
-      await ctx.reply(`
-🎉 <b>Оплата успешно получена!</b>
+      await ctx.reply(`🎉 <b>Оплата успешно получена!</b>
 
 Ваша подписка Knight VPN продлена на <b>${plan.days} дней</b>.
 Новая дата окончания (МСК): <code>${new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU')}</code>
 
-Ваш персональный ключ доступа остается прежним!
-      `, { parse_mode: 'HTML' });
+Ваш персональный ключ доступа остается прежним!`, { parse_mode: 'HTML' });
     } else {
-      // Create a brand new subscription (or reuse details if they have an expired one)
-      const user = await db.getUser(tgId);
       const email = `vpn_user_${tgId}`;
       let uuid = crypto.randomUUID();
       
-      // Let's check if they have an expired subscription in DB so we can reuse UUID
       const expiredSub = await db.getSubscriptionByEmail(email);
       if (expiredSub) {
         uuid = expiredSub.client_uuid;
       }
 
-      // Add to 3x-ui
-      const client = await xuiApi.addClient(email, uuid);
+      const client = await xuiApi.addClient(email, uuid, plan.devices);
       
       if (client.error && !xuiApi.mockMode) {
         console.error('3x-ui API Error during payment registration:', client.error);
       }
 
-      // Create new active subscription
       updatedSub = await db.createSubscription(
         tgId,
         client.email,
         client.uuid,
         client.connectionUrl,
         plan.name,
-        plan.days
+        plan.days,
+        plan.devices
       );
 
-      const keyText = `
-🎉 <b>Оплата успешно получена! Подписка Knight VPN активирована!</b>
+      const keyText = `🎉 <b>Оплата успешно получена! Подписка Knight VPN активирована!</b>
 
 Спасибо за покупку! Доступ предоставлен на <b>${plan.days} дней</b>.
 Действует до (МСК): <code>${new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU')}</code>
 
-🔑 <b>Ваш персональный ключ доступа (подписка):</b>
+🔑 <b>Ваша персональная ссылка для подписки:</b>
 <code>${config.SUB_SERVER_URL}/sub/${client.uuid}</code>
 
-<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
-      `;
+<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция».</i>`;
+
       const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
@@ -422,313 +750,13 @@ bot.on('successful_payment', async (ctx) => {
   }
 });
 
-// Function to send/edit OS selection menu
-async function sendInstructionsMenu(ctx, isCallback = false) {
-  const instructionsText = `
-⚙️ <b>Инструкция по подключению к Knight VPN</b>
-
-Выберите вашу операционную систему / устройство для настройки подключения:
-  `;
-
-  const keyboard = Markup.inlineKeyboard([
-    [
-      Markup.button.callback('🍏 iOS (iPhone/iPad)', 'inst_ios'),
-      Markup.button.callback('🤖 Android', 'inst_android')
-    ],
-    [
-      Markup.button.callback('💻 Windows', 'inst_windows'),
-      Markup.button.callback('🍎 macOS', 'inst_macos')
-    ]
-  ]);
-
-  if (isCallback) {
-    try {
-      await ctx.editMessageText(instructionsText, {
-        parse_mode: 'HTML',
-        ...keyboard
-      });
-    } catch (err) {
-      // Fallback if message edit fails
-      await ctx.reply(instructionsText, {
-        parse_mode: 'HTML',
-        ...keyboard
-      });
-    }
-  } else {
-    await ctx.reply(instructionsText, {
-      parse_mode: 'HTML',
-      ...keyboard
-    });
-  }
-}
-
-// Handler for "⚙️ Инструкция по авторизации"
-bot.hears('⚙️ Инструкция по авторизации', async (ctx) => {
-  await sendInstructionsMenu(ctx, false);
-});
-
-// Callback for back button
-bot.action('inst_back', async (ctx) => {
-  try {
-    await ctx.answerCbQuery();
-  } catch (err) {
-    console.warn('⚠️ Callback query answer failed:', err.message);
-  }
-  await sendInstructionsMenu(ctx, true);
-});
-
-// Callback for getting key inside instructions flow
-bot.action('get_key_from_inst', async (ctx) => {
-  const tgId = ctx.from.id;
-  const activeSub = await db.getActiveSubscription(tgId);
-
-  if (!activeSub) {
-    try {
-      return await ctx.answerCbQuery('У вас нет активного доступа!', { show_alert: true });
-    } catch (err) {
-      return ctx.reply('❌ У вас нет активного доступа!');
-    }
-  }
-
-  try {
-    await ctx.answerCbQuery();
-  } catch (err) {
-    console.warn('⚠️ Callback query answer failed:', err.message);
-  }
-
-  const keyText = `
-🔑 <b>Ваш персональный ключ доступа к Knight VPN (подписка):</b>
-<code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
-
-<i>Нажмите на ссылку выше, чтобы скопировать её в буфер обмена.</i>
-
-⚙️ <b>Быстрая настройка через Happ:</b>
-1️⃣ Скопируйте ссылку подписки выше
-2️⃣ Откройте приложение <b>Happ</b>
-3️⃣ Нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
-4️⃣ Выберите <b>«Добавить из буфера обмена»</b>
-5️⃣ Нажмите кнопку подключения в центре экрана
-  `;
-
-  const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🔑 Получить статический ключ (VLESS)', 'get_static_key')],
-    [Markup.button.callback('🔙 Назад к инструкции', 'inst_back')]
-  ]);
-
-  await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
-});
-
-// Instruction details callbacks
-const showInstruction = (os) => async (ctx) => {
-  try {
-    await ctx.answerCbQuery();
-  } catch (err) {
-    console.warn('⚠️ Callback query answer failed:', err.message);
-  }
-
-  const tgId = ctx.from.id;
-  const activeSub = await db.getActiveSubscription(tgId);
-  const subUrl = activeSub ? `${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}` : null;
-  const autoImportUrl = subUrl ? `sing-box://import-remote?url=${encodeURIComponent(subUrl)}` : null;
-  const autoImportRedirectUrl = activeSub ? `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}` : null;
-
-  let text = '';
-  let inlineKeyboard = [];
-  
-  if (os === 'ios') {
-    text = `
-🍏 <b>Подключение на iOS (iPhone, iPad)</b>
-
-1️⃣ <b>Установите приложение Happ:</b>
-Нажмите кнопку <b>«Скачать из App Store»</b> ниже.
-
-2️⃣ <b>Добавьте подписку:</b>
-${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
-👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
-
-<i>Если авто-импорт не сработал:</i>
-• Скопируйте ссылку подписки вручную из раздела «👤 Мой профиль».
-• Откройте <b>Happ</b>, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта) и выберите <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>
-Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
-
-3️⃣ <b>Подключитесь:</b>
-Нажмите круглую кнопку в центре экрана приложения для запуска VPN. Разрешите системе добавить конфигурацию VPN.
-
-━━━━━━━━━━━━━━━━━━
-<i>Приложение будет автоматически обновлять конфигурации.</i>
-    `;
-    inlineKeyboard.push([Markup.button.url('📥 Скачать из App Store', 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215')]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
-    }
-    inlineKeyboard.push([
-      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
-      Markup.button.callback('🔙 Назад', 'inst_back')
-    ]);
-
-  } else if (os === 'android') {
-    text = `
-🤖 <b>Подключение на Android</b>
-
-1️⃣ <b>Установите приложение Sing-box (совместимое с Happ):</b>
-Установите из <b>Google Play</b> или скачайте <b>APK-файл</b> напрямую с GitHub по кнопкам ниже.
-
-2️⃣ <b>Добавьте подписку:</b>
-${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
-👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
-
-<i>Если авто-импорт не сработал:</i>
-• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».
-• В приложении нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>
-Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
-
-3️⃣ <b>Подключитесь:</b>
-Нажмите кнопку включения в центре экрана приложения и подтвердите создание VPN-подключения в системном запросе Android.
-
-━━━━━━━━━━━━━━━━━━
-<i>Подходит для любых Android-смартфонов, планшетов и Android TV.</i>
-    `;
-    inlineKeyboard.push([
-      Markup.button.url('📥 Google Play', 'https://play.google.com/store/apps/details?id=io.nekohasekai.sfa'),
-      Markup.button.url('📥 APK с GitHub', 'https://github.com/SagerNet/sing-box/releases')
-    ]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
-    }
-    inlineKeyboard.push([
-      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
-      Markup.button.callback('🔙 Назад', 'inst_back')
-    ]);
-
-  } else if (os === 'windows') {
-    text = `
-💻 <b>Подключение на Windows</b>
-
-1️⃣ <b>Скачайте Sing-box для Windows (совместимый с Happ):</b>
-Нажмите кнопку <b>«📥 Скачать для Windows»</b> ниже для перехода к релизам программы.
-
-2️⃣ <b>Добавьте подписку:</b>
-${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
-👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
-
-<i>Если авто-импорт не сработал:</i>
-• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».
-• В программе добавьте новый профиль из буфера обмена.` : `⚠️ <b>У вас нет активной подписки!</b>
-Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
-
-3️⃣ <b>Подключитесь:</b>
-Запустите созданный профиль в программе.
-
-━━━━━━━━━━━━━━━━━━
-<i>При первом запуске брандмауэр Windows может запросить разрешение — подтвердите его.</i>
-    `;
-    inlineKeyboard.push([Markup.button.url('📥 Скачать для Windows (.exe)', 'https://github.com/SagerNet/sing-box/releases')]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
-    }
-    inlineKeyboard.push([
-      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
-      Markup.button.callback('🔙 Назад', 'inst_back')
-    ]);
-
-  } else if (os === 'macos') {
-    text = `
-🍎 <b>Подключение на macOS</b>
-
-1️⃣ <b>Установите приложение Happ:</b>
-Скачайте из App Store по кнопке ниже.
-
-2️⃣ <b>Добавьте подписку:</b>
-${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):
-👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>
-
-<i>Если авто-импорт не сработал:</i>
-• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».
-• В программе <b>Happ</b> нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>
-Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}
-
-3️⃣ <b>Подключитесь:</b>
-Нажмите кнопку включения в программе для запуска VPN.
-
-━━━━━━━━━━━━━━━━━━
-<i>Рекомендуется использовать официальное приложение Happ для автоматического обновления профилей.</i>
-    `;
-    inlineKeyboard.push([
-      Markup.button.url('📥 Скачать из App Store', 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215')
-    ]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([Markup.button.url('⚡️ Авто-импорт в Happ', autoImportRedirectUrl)]);
-    }
-    inlineKeyboard.push([
-      Markup.button.callback('🔑 Получить ключ', 'get_key_from_inst'),
-      Markup.button.callback('🔙 Назад', 'inst_back')
-    ]);
-  }
-
-  try {
-    await ctx.editMessageText(text, {
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      ...Markup.inlineKeyboard(inlineKeyboard)
-    });
-  } catch (err) {
-    // Fallback if editMessageText fails
-    await ctx.reply(text, {
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-      ...Markup.inlineKeyboard(inlineKeyboard)
-    });
-  }
-};
-
 bot.action('inst_ios', showInstruction('ios'));
 bot.action('inst_android', showInstruction('android'));
 bot.action('inst_windows', showInstruction('windows'));
 bot.action('inst_macos', showInstruction('macos'));
 
-// Handler for "🆘 Поддержка"
-bot.hears('🆘 Поддержка', async (ctx) => {
-  const supportText = `
-🆘 <b>Служба поддержки Knight VPN</b>
+// --- ADMIN COMMANDS ---
 
-Если у вас возникли вопросы по оплате, настройке или работе VPN — напишите администратору:
-
-👨‍💻 <b>Контакты администратора:</b> @alexs_vpn_admin
-
-Опишите вашу проблему, указав ваш ID: <code>${ctx.from.id}</code>
-  `;
-
-  await ctx.reply(supportText, { parse_mode: 'HTML' });
-});
-
-// --- ADMIN PANEL HANDLERS ---
-
-bot.hears('👑 Админ-панель', async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
-  await showAdminPanel(ctx);
-});
-
-async function showAdminPanel(ctx) {
-  const stats = await db.getStats();
-  const adminText = `
-👑 <b>Панель администратора:</b>
-
-📊 <b>Статистика:</b>
-• Всего пользователей: <code>${stats.totalUsers}</code>
-• Активных участников: <code>${stats.activeSubscribers}</code>
-• Всего заработано: <code>${stats.totalEarnings} ₽</code>
-
-📝 <b>Команды управления:</b>
-• <code>/give [id] [days]</code> — Предоставить/продлить доступ пользователю на X дней.
-  Пример: <code>/give 123456789 30</code>
-• <code>/broadcast [текст]</code> — Отправить сообщение всем участникам.
-  Пример: <code>/broadcast Внимание! Проводятся технические работы.</code>
-  `;
-
-  await ctx.reply(adminText, { parse_mode: 'HTML' });
-}
-
-// Command /give [id] [days]
 bot.command('give', async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;
 
@@ -755,7 +783,7 @@ bot.command('give', async (ctx) => {
 
     if (activeSub) {
       updatedSub = await db.forceExtendUser(targetId, days);
-      await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid);
+      await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, activeSub.limit_ip);
     } else {
       const email = `vpn_user_${targetId}`;
       let uuid = crypto.randomUUID();
@@ -765,34 +793,32 @@ bot.command('give', async (ctx) => {
         uuid = expiredSub.client_uuid;
       }
 
-      const client = await xuiApi.addClient(email, uuid);
+      const client = await xuiApi.addClient(email, uuid, 1);
       updatedSub = await db.createSubscription(
         targetId,
         client.email,
         client.uuid,
         client.connectionUrl,
         'Выдано админом',
-        days
+        days,
+        1
       );
     }
 
     const expiryDate = new Date(updatedSub.expires_at.replace(' ', 'T') + 'Z').toLocaleString('ru-RU');
 
-    // Notify admin
     await ctx.reply(`✅ Пользователю <code>${targetId}</code> успешно выдан доступ на <b>${days} дней</b>.\nНовая дата окончания: <code>${expiryDate}</code>`, { parse_mode: 'HTML' });
 
-    // Notify user
     try {
-      const userKeyText = `
-🎁 <b>Администратор предоставил/продлил вам подписку Knight VPN на ${days} дней!</b>
+      const userKeyText = `🎁 <b>Администратор предоставил/продлил вам подписку Knight VPN на ${days} дней!</b>
 
 Новая дата окончания (МСК): <code>${expiryDate}</code>
 
 🔑 <b>Ваш персональный ключ доступа (подписка):</b>
 <code>${config.SUB_SERVER_URL}/sub/${updatedSub.client_uuid}</code>
 
-<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция по авторизации».</i>
-      `;
+<i>Нажмите на ссылку выше, чтобы скопировать её. Подробные инструкции по настройке находятся в разделе «⚙️ Инструкция».</i>`;
+
       const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${updatedSub.client_uuid}`;
       const keyboard = Markup.inlineKeyboard([
         [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)],
@@ -809,11 +835,10 @@ bot.command('give', async (ctx) => {
   }
 });
 
-// Command /broadcast [message]
 bot.command('broadcast', async (ctx) => {
   if (!isAdmin(ctx.from.id)) return;
 
-  const text = ctx.message.text.substring(11).trim(); // Remove "/broadcast "
+  const text = ctx.message.text.substring(11).trim();
   if (!text) {
     return ctx.reply('❌ Напишите текст сообщения после команды. Пример: <code>/broadcast Всем привет!</code>', { parse_mode: 'HTML' });
   }
@@ -837,7 +862,6 @@ bot.command('broadcast', async (ctx) => {
   await ctx.reply(`📢 <b>Рассылка завершена!</b>\n\n✅ Успешно отправлено: <code>${successCount}</code>\n❌ Ошибок отправки: <code>${failCount}</code>`, { parse_mode: 'HTML' });
 });
 
-// Global error handling to prevent crash on Telegram API errors
 bot.catch((err, ctx) => {
   console.error(`❌ Telegraf caught an error for update ${ctx?.update?.update_id}:`, err);
 });
