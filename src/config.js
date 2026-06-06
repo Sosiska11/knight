@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,7 +42,34 @@ if (mockXui) {
   console.log('ℹ️ Running in MOCK 3x-ui mode. Dummy VPN keys will be generated without calling the real panel.');
 }
 
-const botBanner = process.env.BOT_BANNER || 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80';
+let botBanner = process.env.BOT_BANNER || 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80';
+
+// Resolve botBanner if it is a local file path
+if (typeof botBanner === 'string' && !botBanner.startsWith('http://') && !botBanner.startsWith('https://')) {
+  const projectRoot = path.join(__dirname, '..');
+  
+  // Try resolving:
+  // 1. Direct path from process.cwd()
+  let resolvedPath = path.resolve(botBanner);
+  
+  // 2. Relative to project root
+  if (!fs.existsSync(resolvedPath)) {
+    resolvedPath = path.resolve(projectRoot, botBanner);
+  }
+  
+  // 3. Relative to src/
+  if (!fs.existsSync(resolvedPath)) {
+    resolvedPath = path.resolve(projectRoot, 'src', botBanner);
+  }
+  
+  if (fs.existsSync(resolvedPath)) {
+    console.log(`🖼 Found local banner image at: ${resolvedPath}`);
+    botBanner = { source: resolvedPath };
+  } else {
+    console.warn(`⚠️ BOT_BANNER file not found at: ${botBanner}. Falling back to default URL.`);
+    botBanner = 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=800&q=80';
+  }
+}
 
 export default {
   BOT_TOKEN: botToken,

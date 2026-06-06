@@ -11,6 +11,19 @@ if (!config.BOT_TOKEN) {
 
 const bot = new Telegraf(config.BOT_TOKEN);
 
+// Middleware to safely catch errors in answerCbQuery (e.g. timeout or connection drops)
+bot.use(async (ctx, next) => {
+  if (ctx.answerCbQuery) {
+    const originalAnswer = ctx.answerCbQuery;
+    ctx.answerCbQuery = function (...args) {
+      return originalAnswer.apply(this, args).catch(err => {
+        console.warn('⚠️ Safe answerCbQuery caught error:', err.message);
+      });
+    };
+  }
+  return next();
+});
+
 // Middleware to register/update user in DB on every message
 bot.use(async (ctx, next) => {
   if (ctx.from) {
@@ -323,23 +336,22 @@ const showInstruction = (os) => async (ctx) => {
 
   } else if (os === 'android') {
     text = `🤖 <b>Подключение на Android</b>\n\n` +
-      `1️⃣ <b>Установите приложение Sing-box (совместимое с Happ):</b>\n` +
-      `Установите из <b>Google Play</b> или скачайте <b>APK-файл</b> напрямую с GitHub по кнопкам ниже.\n\n` +
+      `1️⃣ <b>Установите приложение Happ для Android:</b>\n` +
+      `Скачайте <b>APK-файл</b> напрямую по кнопке ниже.\n\n` +
       `2️⃣ <b>Добавьте подписку:</b>\n` +
       `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
       `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
       `<i>Если авто-импорт не сработал:</i>\n` +
       `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
-      `• В приложении нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
+      `• Откройте <b>Happ</b>, нажмите значок <b>➕</b> и выберите <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
       `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
       `3️⃣ <b>Подключитесь:</b>\n` +
-      `Нажмите кнопку включения в центре экрана приложения и подтвердите создание VPN-подключения в системном запросе Android.\n\n` +
+      `Нажмите круглую кнопку в центре экрана для запуска VPN.\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Подходит для любых Android-смартфонов, планшетов и Android TV.</i>`;
+      `<i>Приложение будет автоматически обновлять конфигурации.</i>`;
 
     inlineKeyboard.push([
-      { text: '📥 Google Play', url: 'https://play.google.com/store/apps/details?id=io.nekohasekai.sfa' },
-      { text: '📥 APK с GitHub', url: 'https://github.com/SagerNet/sing-box/releases' }
+      { text: '📥 Скачать Happ (.apk)', url: 'https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk' }
     ]);
     if (autoImportRedirectUrl) {
       inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
@@ -351,8 +363,8 @@ const showInstruction = (os) => async (ctx) => {
 
   } else if (os === 'windows') {
     text = `💻 <b>Подключение на Windows</b>\n\n` +
-      `1️⃣ <b>Скачайте Sing-box для Windows (совместимый с Happ):</b>\n` +
-      `Нажмите кнопку <b>«📥 Скачать для Windows»</b> ниже для перехода к релизам программы.\n\n` +
+      `1️⃣ <b>Установите приложение Happ для Windows:</b>\n` +
+      `Нажмите кнопку <b>«📥 Скачать для Windows»</b> ниже для перехода к скачиванию.\n\n` +
       `2️⃣ <b>Добавьте подписку:</b>\n` +
       `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
       `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
@@ -361,11 +373,11 @@ const showInstruction = (os) => async (ctx) => {
       `• В программе добавьте новый профиль из буфера обмена.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
       `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
       `3️⃣ <b>Подключитесь:</b>\n` +
-      `Запустите созданный профиль в программе.\n\n` +
+      `Нажмите кнопку подключения для запуска VPN.\n\n` +
       `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>При первом запуске брандмауэр Windows может запросить разрешение — подтвердите его.</i>`;
+      `<i>Приложение будет автоматически обновлять конфигурации.</i>`;
 
-    inlineKeyboard.push([{ text: '📥 Скачать для Windows (.exe)', url: 'https://github.com/SagerNet/sing-box/releases' }]);
+    inlineKeyboard.push([{ text: '📥 Скачать для Windows (.exe)', url: 'https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe' }]);
     if (autoImportRedirectUrl) {
       inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
     }
