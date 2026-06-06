@@ -138,8 +138,9 @@ async function showProfile(ctx) {
     });
     
     profileText += `• <b>Статус подписки:</b> ✅ Активна\n`;
-    profileText += `• <b>Тарифный план:</b> ${activeSub.plan_name}\n`;
-    profileText += `• <b>Лимит устройств:</b> ${activeSub.limit_ip || 1} шт.\n`;
+    const devices = activeSub.limit_ip || 1;
+    const deviceWord = devices === 1 ? 'устройство' : (devices === 3 ? 'устройства' : 'устройств');
+    profileText += `• <b>Тарифный план:</b> ${devices} ${deviceWord}\n`;
     profileText += `• <b>Активна до (МСК):</b> <code>${expiryDate}</code>\n\n`;
     profileText += `📥 Ваш персональный ключ доступа к Knight VPN готов. Нажмите на кнопку ниже, чтобы получить его.`;
 

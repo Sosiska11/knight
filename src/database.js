@@ -86,6 +86,7 @@ export async function initDb() {
       amount REAL,
       plan_id TEXT,
       status TEXT DEFAULT 'pending',
+      invoice_message_id INTEGER,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(tg_id) REFERENCES users(tg_id)
     )
@@ -103,6 +104,14 @@ export async function initDb() {
   try {
     await dbRun(`ALTER TABLE subscriptions ADD COLUMN limit_ip INTEGER DEFAULT 1`);
     console.log('📝 Added limit_ip column to subscriptions table (migration).');
+  } catch (err) {
+    // Ignore error if column already exists
+  }
+
+  // Migration: Add invoice_message_id column if it doesn't exist (for existing databases)
+  try {
+    await dbRun(`ALTER TABLE payments ADD COLUMN invoice_message_id INTEGER`);
+    console.log('📝 Added invoice_message_id column to payments table (migration).');
   } catch (err) {
     // Ignore error if column already exists
   }
@@ -176,7 +185,7 @@ export async function createSubscription(tgId, email, uuid, connectionUrl, planN
   return await getActiveSubscription(tgId);
 }
 
-export async function extendSubscription(tgId, durationDays, limitIp = null) {
+export async function extendSubscription(tgId, durationDays, limitIp = null, planName = null) {
   const activeSub = await getActiveSubscription(tgId);
   if (!activeSub) {
     return null; // Must create a new subscription instead of extending
@@ -188,10 +197,17 @@ export async function extendSubscription(tgId, durationDays, limitIp = null) {
 
   const newLimitIp = limitIp !== null ? limitIp : (activeSub.limit_ip || 1);
 
-  await dbRun(
-    "UPDATE subscriptions SET expires_at = ?, status = 'active', warning_sent = 0, limit_ip = ? WHERE id = ?",
-    [newExpiresAt, newLimitIp, activeSub.id]
-  );
+  if (planName) {
+    await dbRun(
+      "UPDATE subscriptions SET expires_at = ?, status = 'active', warning_sent = 0, limit_ip = ?, plan_name = ? WHERE id = ?",
+      [newExpiresAt, newLimitIp, planName, activeSub.id]
+    );
+  } else {
+    await dbRun(
+      "UPDATE subscriptions SET expires_at = ?, status = 'active', warning_sent = 0, limit_ip = ? WHERE id = ?",
+      [newExpiresAt, newLimitIp, activeSub.id]
+    );
+  }
 
   return await getActiveSubscription(tgId);
 }
@@ -201,6 +217,13 @@ export async function createPayment(tgId, paymentId, amount, planId) {
   return await dbRun(
     'INSERT OR REPLACE INTO payments (tg_id, payment_id, amount, plan_id, status) VALUES (?, ?, ?, ?, ?)',
     [tgId, paymentId, amount, planId, 'pending']
+  );
+}
+
+export async function updatePaymentInvoiceMessageId(paymentId, invoiceMessageId) {
+  return await dbRun(
+    'UPDATE payments SET invoice_message_id = ? WHERE payment_id = ?',
+    [invoiceMessageId, paymentId]
   );
 }
 
@@ -278,7 +301,7 @@ export async function getAllUsers() {
 export async function forceExtendUser(tgId, days) {
   const activeSub = await getActiveSubscription(tgId);
   if (activeSub) {
-    return await extendSubscription(tgId, days);
+    return await extendSubscription(tgId, days, null, 'Выдано админом');
   } else {
     // Create new with dummy credentials or update existing expired one
     const user = await getUser(tgId);
