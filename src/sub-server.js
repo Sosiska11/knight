@@ -25,6 +25,7 @@ app.get('/sub/:uuid', async (req, res) => {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     // Encode unicode emoji safely for Node.js headers using binary/latin1 encoding
     res.setHeader('Profile-Title', Buffer.from('⚔️ Knight VPN').toString('binary'));
+    res.setHeader('Profile-Notice', Buffer.from('⚠️ Резервный профиль (LTE) имеет лимит 15 ГБ. \\n🚫 Торренты строго запрещены! \\n🆘 Поддержка: @knightvpn_help').toString('binary'));
     res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''KnightVPN");
     
     // Shows traffic usage (1 TB total) and expiration date inside Hiddify
@@ -36,13 +37,25 @@ app.get('/sub/:uuid', async (req, res) => {
     // Dynamically override the server name/remark with a beautiful name and flag
     let connectionUrl = sub.connection_url;
     if (connectionUrl.includes('#')) {
-      connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Knight VPN | Netherlands';
+      connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Нидерланды';
     } else {
-      connectionUrl = connectionUrl + '#🇳🇱 Knight VPN | Netherlands';
+      connectionUrl = connectionUrl + '#🇳🇱 Нидерланды';
     }
 
-    // Base64 encode the connection URL (standard format for V2Ray subscriptions)
-    const base64Config = Buffer.from(connectionUrl + '\n').toString('base64');
+    let configsText = connectionUrl + '\n';
+
+    if (sub.bypass_connection_url) {
+      let bypassUrl = sub.bypass_connection_url;
+      if (bypassUrl.includes('#')) {
+        bypassUrl = bypassUrl.split('#')[0] + '#🇷🇺 LTE | Обходка';
+      } else {
+        bypassUrl = bypassUrl + '#🇷🇺 LTE | Обходка';
+      }
+      configsText += bypassUrl + '\n';
+    }
+
+    // Base64 encode the connection URLs (standard format for V2Ray subscriptions)
+    const base64Config = Buffer.from(configsText).toString('base64');
     
     res.send(base64Config);
   } catch (error) {
@@ -343,6 +356,9 @@ app.get('/import/:uuid', async (req, res) => {
         <div class="status-container">
             <h1>Импорт подписки</h1>
             <p>Выберите ваш клиент для автоматического импорта ключа:</p>
+            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 12px; margin-top: 15px; font-size: 12px; color: #fca5a5; line-height: 1.4; text-align: left;">
+                ⚠️ <b>Внимание:</b> На резервном обходном ключе (для LTE) установлен лимит трафика 15 ГБ. Использование торрентов строго запрещено!
+            </div>
         </div>
 
         <div class="client-list">

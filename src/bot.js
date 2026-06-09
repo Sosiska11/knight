@@ -137,10 +137,19 @@ async function showProfile(ctx) {
       minute: '2-digit'
     });
     
+    let activeIpsCount = 0;
+    try {
+      const activeIps = await xuiApi.getClientIps(activeSub.client_email);
+      activeIpsCount = activeIps.length;
+    } catch (err) {
+      console.error('Error fetching active IPs for profile:', err);
+    }
+    
     profileText += `• <b>Статус подписки:</b> ✅ Активна\n`;
     const devices = activeSub.limit_ip || 1;
-    const deviceWord = devices === 1 ? 'устройство' : (devices === 3 ? 'устройства' : 'устройств');
+    const deviceWord = devices === 1 ? 'устройство' : ([2, 3, 4].includes(devices) ? 'устройства' : 'устройств');
     profileText += `• <b>Тарифный план:</b> ${devices} ${deviceWord}\n`;
+    profileText += `• <b>Активно устройств:</b> <code>${activeIpsCount} из ${devices}</code>\n`;
     profileText += `• <b>Активна до (МСК):</b> <code>${expiryDate}</code>\n\n`;
     profileText += `📥 Ваш персональный ключ доступа к Knight VPN готов. Нажмите на кнопку ниже, чтобы получить его.`;
 
@@ -204,7 +213,7 @@ async function showDeviceSelect(ctx, duration) {
   const buttons = [];
   plansForDuration.forEach(plan => {
     buttons.push([{
-      text: `${plan.devices} ${plan.devices === 1 ? 'устройство' : plan.devices === 3 ? 'устройства' : 'устройств'} — ${plan.price} ₽`,
+      text: `${plan.devices} ${plan.devices === 1 ? 'устройство' : ([2, 3, 4].includes(plan.devices) ? 'устройства' : 'устройств')} — ${plan.price} ₽`,
       callback_data: `buy_select:${plan.id}`
     }]);
   });
@@ -229,7 +238,7 @@ const buyPlanAction = async (ctx, planId) => {
       `• <b>Лимит устройств:</b> ${plan.devices} шт.\n` +
       `• <b>Способ оплаты:</b> Перевод на карту или СБП\n` +
       `• <b>Реквизиты:</b> <code>[Здесь будут указаны ваши реквизиты]</code>\n\n` +
-      `После оплаты, пожалуйста, отправьте скриншот чека/квитанции администратору: @alexs_vpn_admin\n\n` +
+      `После оплаты, пожалуйста, отправьте скриншот чека/квитанции администратору: @knightvpn_help\n\n` +
       `После подтверждения администратор сразу активирует ваш доступ. Пожалуйста, укажите ваш Telegram ID: <code>${tgId}</code> в сообщении с чеком.`;
 
     const backButton = {
@@ -422,7 +431,7 @@ const showInstruction = (os) => async (ctx) => {
 async function showSupport(ctx) {
   const supportText = `🆘 <b>Служба поддержки Knight VPN</b>\n\n` +
     `Если у вас возникли вопросы по оплате, настройке или работе VPN — напишите администратору:\n\n` +
-    `👨‍💻 <b>Контакты администратора:</b> @alexs_vpn_admin\n\n` +
+    `👨‍💻 <b>Контакты администратора:</b> @knightvpn_help\n\n` +
     `Опишите вашу проблему, указав ваш ID: <code>${ctx.from.id}</code>`;
 
   const keyboard = {
@@ -506,6 +515,8 @@ bot.action('get_key', async (ctx) => {
 4. Выберите <b>«Добавить из буфера обмена»</b>
 5. Нажмите кнопку подключения в центре экрана
 
+⚠️ <b>Внимание:</b> На резервном обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов на обходном профиле строго запрещено!
+
 <i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>`;
 
   const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
@@ -542,6 +553,8 @@ bot.action('get_key_from_inst', async (ctx) => {
 4. Выберите <b>«Добавить из буфера обмена»</b>
 5. Нажмите кнопку подключения в центре экрана
 
+⚠️ <b>Внимание:</b> На резервном обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов на обходном профиле строго запрещено!
+
 <i>Если ваше приложение не поддерживает ссылки для подписки, вы можете получить статический ключ (VLESS) по кнопке ниже.</i>`;
 
   const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
@@ -566,12 +579,20 @@ bot.action('get_static_key', async (ctx) => {
 
   await ctx.answerCbQuery();
 
-  const keyText = `🔑 <b>Ваш статический ключ доступа (VLESS):</b>
+  let keyText = `🔑 <b>Ваш основной статический ключ доступа (VLESS):</b>
 <code>${activeSub.connection_url}</code>
 
-<i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>
+<i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>`;
 
-⚠️ <i>Используйте этот статический ключ только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок.</i>`;
+  if (activeSub.bypass_connection_url) {
+    keyText += `\n\n🛡️ <b>Резервный ключ для обхода блокировок:</b>
+<code>${activeSub.bypass_connection_url}</code>
+
+<i>Используйте этот резервный ключ, если основной не подключается из-за блокировок вашего оператора.
+⚠️ <b>Внимание:</b> На обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов строго запрещено!</i>`;
+  }
+
+  keyText += `\n\n⚠️ <i>Используйте эти статические ключи только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок.</i>`;
 
   const keyboard = {
     inline_keyboard: [
@@ -609,7 +630,8 @@ bot.action('activate_trial', async (ctx) => {
       client.connectionUrl,
       PLANS.trial.name,
       PLANS.trial.days,
-      PLANS.trial.devices
+      PLANS.trial.devices,
+      client.bypassConnectionUrl
     );
 
     await db.markTrialUsed(tgId);
@@ -707,7 +729,10 @@ bot.on('successful_payment', async (ctx) => {
 
     if (activeSub) {
       updatedSub = await db.extendSubscription(tgId, plan.days, plan.devices);
-      await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, updatedSub.limit_ip || plan.devices);
+      const client = await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, updatedSub.limit_ip || plan.devices);
+      if (client.connectionUrl) {
+        await db.updateSubscriptionUrls(tgId, client.connectionUrl, client.bypassConnectionUrl);
+      }
 
       await ctx.reply(`🎉 <b>Оплата успешно получена!</b>
 
@@ -737,7 +762,8 @@ bot.on('successful_payment', async (ctx) => {
         client.connectionUrl,
         plan.name,
         plan.days,
-        plan.devices
+        plan.devices,
+        client.bypassConnectionUrl
       );
 
       const keyText = `🎉 <b>Оплата успешно получена! Подписка Knight VPN активирована!</b>
@@ -796,7 +822,10 @@ bot.command('give', async (ctx) => {
 
     if (activeSub) {
       updatedSub = await db.forceExtendUser(targetId, days);
-      await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, activeSub.limit_ip);
+      const client = await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, activeSub.limit_ip);
+      if (client.connectionUrl) {
+        await db.updateSubscriptionUrls(targetId, client.connectionUrl, client.bypassConnectionUrl);
+      }
     } else {
       const email = `vpn_user_${targetId}`;
       let uuid = crypto.randomUUID();
@@ -814,7 +843,8 @@ bot.command('give', async (ctx) => {
         client.connectionUrl,
         'Выдано админом',
         days,
-        1
+        1,
+        client.bypassConnectionUrl
       );
     }
 

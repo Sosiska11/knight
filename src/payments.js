@@ -13,10 +13,18 @@ export const PLANS = {
   '1month_1': {
     id: '1month_1',
     name: '1 месяц (1 устр.)',
-    price: 150,
+    price: 120,
     days: 30,
     devices: 1,
     description: 'Подписка Knight VPN на 30 дней для 1 устройства.'
+  },
+  '1month_2': {
+    id: '1month_2',
+    name: '1 месяц (2 устр.)',
+    price: 150,
+    days: 30,
+    devices: 2,
+    description: 'Подписка Knight VPN на 30 дней для 2 устройств.'
   },
   '1month_3': {
     id: '1month_3',
@@ -29,18 +37,26 @@ export const PLANS = {
   '1month_5': {
     id: '1month_5',
     name: '1 месяц (5 устр.)',
-    price: 450,
+    price: 420,
     days: 30,
     devices: 5,
-    description: 'Подписка Knight VPN на 30  дней для 5 устройств.'
+    description: 'Подписка Knight VPN на 30 дней для 5 устройств.'
   },
   '3months_1': {
     id: '3months_1',
     name: '3 месяца (1 устр.)',
-    price: 400,
+    price: 320,
     days: 90,
     devices: 1,
     description: 'Подписка Knight VPN на 90 дней для 1 устройства.'
+  },
+  '3months_2': {
+    id: '3months_2',
+    name: '3 месяца (2 устр.)',
+    price: 400,
+    days: 90,
+    devices: 2,
+    description: 'Подписка Knight VPN на 90 дней для 2 устройств.'
   },
   '3months_3': {
     id: '3months_3',
@@ -53,7 +69,7 @@ export const PLANS = {
   '3months_5': {
     id: '3months_5',
     name: '3 месяца (5 устр.)',
-    price: 1200,
+    price: 1100,
     days: 90,
     devices: 5,
     description: 'Подписка Knight VPN на 90 дней для 5 устройств.'
@@ -61,10 +77,18 @@ export const PLANS = {
   '6months_1': {
     id: '6months_1',
     name: '6 месяцев (1 устр.)',
-    price: 750,
+    price: 600,
     days: 180,
     devices: 1,
     description: 'Подписка Knight VPN на 180 дней для 1 устройства.'
+  },
+  '6months_2': {
+    id: '6months_2',
+    name: '6 месяцев (2 устр.)',
+    price: 750,
+    days: 180,
+    devices: 2,
+    description: 'Подписка Knight VPN на 180 дней для 2 устройств.'
   },
   '6months_3': {
     id: '6months_3',
@@ -77,7 +101,7 @@ export const PLANS = {
   '6months_5': {
     id: '6months_5',
     name: '6 месяцев (5 устр.)',
-    price: 2200,
+    price: 2100,
     days: 180,
     devices: 5,
     description: 'Подписка Knight VPN на 180 дней для 5 устройств.'

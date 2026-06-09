@@ -67,6 +67,7 @@ export async function initDb() {
       client_email TEXT UNIQUE,
       client_uuid TEXT,
       connection_url TEXT,
+      bypass_connection_url TEXT,
       plan_name TEXT,
       starts_at TEXT,
       expires_at TEXT,
@@ -112,6 +113,14 @@ export async function initDb() {
   try {
     await dbRun(`ALTER TABLE payments ADD COLUMN invoice_message_id INTEGER`);
     console.log('📝 Added invoice_message_id column to payments table (migration).');
+  } catch (err) {
+    // Ignore error if column already exists
+  }
+
+  // Migration: Add bypass_connection_url column if it doesn't exist (for existing databases)
+  try {
+    await dbRun(`ALTER TABLE subscriptions ADD COLUMN bypass_connection_url TEXT`);
+    console.log('📝 Added bypass_connection_url column to subscriptions table (migration).');
   } catch (err) {
     // Ignore error if column already exists
   }
@@ -162,24 +171,25 @@ export async function getSubscriptionByUuid(uuid) {
   return await dbGet('SELECT * FROM subscriptions WHERE client_uuid = ?', [uuid]);
 }
 
-export async function createSubscription(tgId, email, uuid, connectionUrl, planName, durationDays, limitIp = 1) {
+export async function createSubscription(tgId, email, uuid, connectionUrl, planName, durationDays, limitIp = 1, bypassConnectionUrl = null) {
   const startsAt = new Date().toISOString().replace('T', ' ').substring(0, 19); // YYYY-MM-DD HH:MM:SS
   const expires = new Date();
   expires.setDate(expires.getDate() + durationDays);
   const expiresAt = expires.toISOString().replace('T', ' ').substring(0, 19);
 
   await dbRun(
-    `INSERT INTO subscriptions (tg_id, client_email, client_uuid, connection_url, plan_name, starts_at, expires_at, status, warning_sent, limit_ip)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)
+    `INSERT INTO subscriptions (tg_id, client_email, client_uuid, connection_url, bypass_connection_url, plan_name, starts_at, expires_at, status, warning_sent, limit_ip)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)
      ON CONFLICT(client_email) DO UPDATE SET
        connection_url = excluded.connection_url,
+       bypass_connection_url = excluded.bypass_connection_url,
        plan_name = excluded.plan_name,
        starts_at = excluded.starts_at,
        expires_at = excluded.expires_at,
        status = 'active',
        warning_sent = 0,
        limit_ip = excluded.limit_ip`,
-    [tgId, email, uuid, connectionUrl, planName, startsAt, expiresAt, limitIp]
+    [tgId, email, uuid, connectionUrl, bypassConnectionUrl, planName, startsAt, expiresAt, limitIp]
   );
 
   return await getActiveSubscription(tgId);
@@ -210,6 +220,13 @@ export async function extendSubscription(tgId, durationDays, limitIp = null, pla
   }
 
   return await getActiveSubscription(tgId);
+}
+
+export async function updateSubscriptionUrls(tgId, connectionUrl, bypassConnectionUrl) {
+  return await dbRun(
+    'UPDATE subscriptions SET connection_url = ?, bypass_connection_url = ? WHERE tg_id = ? AND status = "active"',
+    [connectionUrl, bypassConnectionUrl, tgId]
+  );
 }
 
 // Payment methods

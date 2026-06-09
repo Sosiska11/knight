@@ -21,6 +21,8 @@ const xuiUrl = process.env.XUI_URL;
 const xuiUsername = process.env.XUI_USERNAME;
 const xuiPassword = process.env.XUI_PASSWORD;
 const xuiInboundId = parseInt(process.env.XUI_INBOUND_ID || '1', 10);
+const xuiBypassInboundId = process.env.XUI_BYPASS_INBOUND_ID ? parseInt(process.env.XUI_BYPASS_INBOUND_ID, 10) : null;
+const xuiBypassLimitGb = parseInt(process.env.XUI_BYPASS_LIMIT_GB || '0', 10);
 const xuiLimitIp = parseInt(process.env.XUI_LIMIT_IP || '1', 10);
 const mockXui = process.env.MOCK_XUI === 'true';
 
@@ -79,6 +81,8 @@ export default {
   XUI_USERNAME: xuiUsername,
   XUI_PASSWORD: xuiPassword,
   XUI_INBOUND_ID: xuiInboundId,
+  XUI_BYPASS_INBOUND_ID: xuiBypassInboundId,
+  XUI_BYPASS_LIMIT_GB: xuiBypassLimitGb,
   XUI_LIMIT_IP: xuiLimitIp,
   MOCK_XUI: mockXui,
   DATABASE_FILE: databaseFile,

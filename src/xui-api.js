@@ -27,7 +27,7 @@ class XuiClient {
       
       // 1. GET request to the root page to obtain initial session cookie and CSRF token
       const getResponse = await axios.get(`${this.baseUrl}/`, {
-        timeout: 5000,
+        timeout: 15000,
         validateStatus: () => true
       });
 
@@ -150,12 +150,14 @@ class XuiClient {
   // Add client to inbound
   async addClient(email, uuid = crypto.randomUUID(), limitIp = config.XUI_LIMIT_IP) {
     const inboundId = config.XUI_INBOUND_ID;
+    const bypassInboundId = config.XUI_BYPASS_INBOUND_ID;
 
     if (this.mockMode) {
       console.log(`[MOCK] Added client: email=${email}, uuid=${uuid}`);
       // Generate a mock Reality link
-      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Knight VPN | Netherlands`;
-      return { email, uuid, connectionUrl: mockLink };
+      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
+      const mockBypassLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
+      return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink };
     }
 
     // Clean up any existing client with the same email to avoid collisions (e.g. after database resets)
@@ -169,7 +171,9 @@ class XuiClient {
     try {
       const headers = await this.getHeaders();
       if (this.mockMode) return this.addClient(email, uuid);
-      const clientPayload = {
+
+      // 1. Add to Main Inbound
+      const mainPayload = {
         inboundIds: [inboundId],
         client: {
           id: uuid,
@@ -186,22 +190,59 @@ class XuiClient {
       };
 
       const url = `${this.baseUrl}/panel/api/clients/add`;
-      const response = await axios.post(url, clientPayload, { headers, timeout: 10000 });
+      const response = await axios.post(url, mainPayload, { headers, timeout: 10000 });
 
       if (!response.data || !response.data.success) {
-        throw new Error(response.data?.msg || 'Unknown panel error');
+        throw new Error(`Main inbound error: ${response.data?.msg || 'Unknown error'}`);
       }
 
-      console.log(`✅ Client ${email} added in 3x-ui.`);
+      console.log(`✅ Client ${email} added in 3x-ui to main inbound.`);
 
-      // Attempt to build the Reality link automatically
+      // 2. Add to Bypass Inbound
+      let addedBypass = false;
+      if (bypassInboundId) {
+        const bypassPayload = {
+          inboundIds: [bypassInboundId],
+          client: {
+            id: uuid,
+            flow: 'xtls-rprx-vision',
+            email: email + '_bp',
+            limitIp: limitIp,
+            totalGB: config.XUI_BYPASS_LIMIT_GB > 0 ? config.XUI_BYPASS_LIMIT_GB * 1024 * 1024 * 1024 : 0,
+            expiryTime: 0,
+            enable: true,
+            tgId: 0,
+            subId: '',
+            comment: 'Bypass emergency profile'
+          }
+        };
+
+        try {
+          const bypassResponse = await axios.post(url, bypassPayload, { headers, timeout: 10000 });
+          if (bypassResponse.data && bypassResponse.data.success) {
+            console.log(`✅ Client ${email} added in 3x-ui to bypass inbound.`);
+            addedBypass = true;
+          } else {
+            console.warn(`⚠️ Failed to add client to bypass inbound: ${bypassResponse.data?.msg || 'Unknown panel error'}`);
+          }
+        } catch (err) {
+          console.error(`⚠️ Failed to add client to bypass inbound due to request error:`, err.message);
+        }
+      }
+
+      // Attempt to build the Reality links automatically
       const connectionUrl = await this.buildRealityLink(inboundId, uuid, email);
-      return { email, uuid, connectionUrl };
+      let bypassConnectionUrl = null;
+      if (bypassInboundId && addedBypass) {
+        bypassConnectionUrl = await this.buildRealityLink(bypassInboundId, uuid, email);
+      }
+      return { email, uuid, connectionUrl, bypassConnectionUrl };
     } catch (error) {
       console.error(`❌ Failed to add client ${email} in 3x-ui:`, error.message);
       // Generate fallback key so user gets SOMETHING and we can debug
-      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Knight VPN | Netherlands`;
-      return { email, uuid, connectionUrl: mockLink, error: error.message };
+      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
+      const mockBypassLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
+      return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink, error: error.message };
     }
   }
 
@@ -218,9 +259,11 @@ class XuiClient {
       
       // Try MHSanaei 3.x.x endpoint first: /panel/api/clients/del/{email}
       let url = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email)}`;
-      console.log(`🗑️ Attempting to delete client ${email} using URL: ${url}`);
+      let bypassUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_bp')}`;
+      console.log(`🗑️ Attempting to delete client ${email} and bypass client...`);
       
       let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
+      await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
 
       // If it fails or returns 404/405, try the older MHSanaei / FranzKafka endpoints as fallbacks
       if (response.status !== 200 || !response.data?.success) {
@@ -228,6 +271,14 @@ class XuiClient {
         const inboundId = config.XUI_INBOUND_ID;
         url = `${this.baseUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
         response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
+
+        // If bypass inbound is configured, clean it up as well
+        if (config.XUI_BYPASS_INBOUND_ID) {
+          const bypassUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_BYPASS_INBOUND_ID}/delClient/${uuid}`;
+          await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+            console.warn(`⚠️ Failed to delete client from bypass inbound:`, err.message);
+          });
+        }
       }
 
       if (response.status === 200 && response.data?.success) {
@@ -245,15 +296,20 @@ class XuiClient {
   // Construct Reality connection URL from Inbound configuration
   async buildRealityLink(inboundId, uuid, email) {
     const inbound = await this.getInbound(inboundId);
+    
+    // Choose appropriate remark
+    const remark = inboundId === config.XUI_BYPASS_INBOUND_ID
+      ? '🇷🇺 LTE | Обходка'
+      : '🇳🇱 Нидерланды';
+
     if (!inbound) {
       // Fallback if we can't fetch inbound settings
       const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#🇳🇱 Knight VPN | Netherlands`;
+      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#${remark}`;
     }
 
     try {
       const port = inbound.port;
-      const remark = `🇳🇱 Knight VPN | Netherlands`;
       const streamSettings = typeof inbound.streamSettings === 'string'
         ? JSON.parse(inbound.streamSettings)
         : inbound.streamSettings;
@@ -280,7 +336,34 @@ class XuiClient {
     } catch (err) {
       console.error('❌ Error parsing inbound settings to build link:', err);
       const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#🇳🇱 Knight VPN | Netherlands`;
+      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#${remark}`;
+    }
+  }
+
+  // Get active client IPs
+  async getClientIps(email) {
+    if (this.mockMode) {
+      return ['127.0.0.1'];
+    }
+
+    try {
+      const headers = await this.getHeaders();
+      const url = `${this.baseUrl}/panel/api/clients/ips/${email}`;
+      const response = await axios.post(url, {}, { headers, timeout: 5000 });
+
+      if (response.data && response.data.success) {
+        const obj = response.data.obj;
+        if (Array.isArray(obj)) {
+          return obj;
+        } else if (typeof obj === 'string') {
+          if (obj === 'No IP Record') return [];
+          return obj.split(',').map(ip => ip.trim()).filter(Boolean);
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error(`❌ Failed to get client IPs for ${email}:`, error.message);
+      return [];
     }
   }
 }
