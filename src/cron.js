@@ -433,8 +433,19 @@ export async function fetchReserveNodes() {
       'https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/14.txt'
     ];
 
-    const deCandidates = [];
-    const nlCandidates = [];
+    const SUPPORTED_COUNTRIES = [
+      { code: 'DE', flag: '🇩🇪', name: 'Германия', keywords: ['германия', 'germany'], regex: /\bde\b|\bde-\d+/i },
+      { code: 'NL', flag: '🇳🇱', name: 'Нидерланды', keywords: ['нидерланды', 'netherlands'], regex: /\bnl\b|\bnl-\d+/i },
+      { code: 'PL', flag: '🇵🇱', name: 'Польша', keywords: ['польша', 'poland'], regex: /\bpl\b|\bpl-\d+/i },
+      { code: 'FR', flag: '🇫🇷', name: 'Франция', keywords: ['франция', 'france'], regex: /\bfr\b|\bfr-\d+/i },
+      { code: 'RU', flag: '🇷🇺', name: 'Россия', keywords: ['россия', 'russia'], regex: /\bru\b|\bru-\d+/i },
+      { code: 'SG', flag: '🇸🇬', name: 'Сингапур', keywords: ['сингапур', 'singapore'], regex: /\bsg\b|\bsg-\d+/i }
+    ];
+
+    const candidates = {};
+    for (const country of SUPPORTED_COUNTRIES) {
+      candidates[country.code] = [];
+    }
 
     for (const url of urls) {
       try {
@@ -484,25 +495,20 @@ export async function fetchReserveNodes() {
 
           const lowerRemark = remark.toLowerCase();
 
-          // Look for Germany (checking only in the decoded remark/hash)
-          if (
-            lowerRemark.includes('германия') || 
-            lowerRemark.includes('germany') || 
-            /\bde\b/i.test(remark) || 
-            /\bde-\d+/i.test(remark) || 
-            remark.includes('🇩🇪')
-          ) {
-            deCandidates.push(cleanLine);
+          // Match country
+          let matchedCountry = null;
+          for (const country of SUPPORTED_COUNTRIES) {
+            const hasKeyword = country.keywords.some(kw => lowerRemark.includes(kw));
+            const hasRegex = country.regex.test(remark);
+            const hasFlag = remark.includes(country.flag);
+            if (hasKeyword || hasRegex || hasFlag) {
+              matchedCountry = country.code;
+              break;
+            }
           }
-          // Look for Netherlands (checking only in the decoded remark/hash)
-          else if (
-            lowerRemark.includes('нидерланды') || 
-            lowerRemark.includes('netherlands') || 
-            /\bnl\b/i.test(remark) || 
-            /\bnl-\d+/i.test(remark) || 
-            remark.includes('🇳🇱')
-          ) {
-            nlCandidates.push(cleanLine);
+
+          if (matchedCountry) {
+            candidates[matchedCountry].push(cleanLine);
           }
         }
       } catch (err) {
@@ -520,19 +526,6 @@ export async function fetchReserveNodes() {
       return PRIORITY_SNIS.some(p => sni === p || sni.endsWith('.' + p));
     }
 
-    // Split into priority and regular candidates (all are gRPC now)
-    const dePriority = deCandidates.filter(c => isPriorityNode(c));
-    const deRegular = deCandidates.filter(c => !isPriorityNode(c));
-
-    const nlPriority = nlCandidates.filter(c => isPriorityNode(c));
-    const nlRegular = nlCandidates.filter(c => !isPriorityNode(c));
-
-    // Shuffle all groups
-    shuffleArray(dePriority);
-    shuffleArray(deRegular);
-    shuffleArray(nlPriority);
-    shuffleArray(nlRegular);
-
     // Deduplicate queues by host:port
     function uniqNodes(lines) {
       const seen = new Set();
@@ -546,18 +539,17 @@ export async function fetchReserveNodes() {
       });
     }
 
-    const uniqueDeQueue = uniqNodes([
-      ...dePriority,
-      ...deRegular
-    ]);
-    
-    const uniqueNlQueue = uniqNodes([
-      ...nlPriority,
-      ...nlRegular
-    ]);
+    const uniqueQueues = {};
+    for (const country of SUPPORTED_COUNTRIES) {
+      const list = candidates[country.code];
+      const priority = list.filter(c => isPriorityNode(c));
+      const regular = list.filter(c => !isPriorityNode(c));
+      shuffleArray(priority);
+      shuffleArray(regular);
+      uniqueQueues[country.code] = uniqNodes([...priority, ...regular]);
+    }
 
-    const deNodes = [];
-    const nlNodes = [];
+    const verifiedNodes = [];
 
     // Helper to process a queue in chunks of concurrent promises
     async function processQueueInChunks(queue, limit, targetArray, countryCode) {
@@ -579,15 +571,26 @@ export async function fetchReserveNodes() {
       }
     }
 
-    // Verify candidates to find up to 3 working ones for Germany & Netherlands in parallel chunks
-    console.log(`⏳ Verifying DE candidate queue (${uniqueDeQueue.length} nodes) in chunks of 5...`);
-    await processQueueInChunks(uniqueDeQueue, 5, deNodes, 'DE');
+    // Verify candidates to find up to 3 working ones per country
+    for (const country of SUPPORTED_COUNTRIES) {
+      const queue = uniqueQueues[country.code];
+      const countryNodes = [];
+      if (queue.length > 0) {
+        console.log(`⏳ Verifying ${country.code} candidate queue (${queue.length} nodes) in chunks of 5...`);
+        await processQueueInChunks(queue, 5, countryNodes, country.code);
+      }
+      verifiedNodes.push(...countryNodes);
+    }
 
-    console.log(`⏳ Verifying NL candidate queue (${uniqueNlQueue.length} nodes) in chunks of 5...`);
-    await processQueueInChunks(uniqueNlQueue, 5, nlNodes, 'NL');
-
-    reserveNodes = [...deNodes, ...nlNodes];
-    console.log(`✅ Cached ${reserveNodes.length} verified reserve nodes (DE: ${deNodes.length}, NL: ${nlNodes.length})`);
+    reserveNodes = verifiedNodes;
+    
+    // Log counts
+    const countsLog = SUPPORTED_COUNTRIES.map(c => {
+      const count = reserveNodes.filter(n => n.country === c.code).length;
+      return `${c.code}: ${count}`;
+    }).join(', ');
+    
+    console.log(`✅ Cached ${reserveNodes.length} verified reserve nodes (${countsLog})`);
   } catch (error) {
     console.error('❌ Failed to fetch reserve nodes:', error.message);
   }

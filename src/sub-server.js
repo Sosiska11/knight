@@ -123,13 +123,23 @@ app.get('/sub/:uuid', async (req, res) => {
 
     // Add reserve nodes from goida-vpn-configs
     try {
-      let countDE = 1;
-      let countNL = 1;
+      const countryNames = {
+        'DE': { name: 'Германия', flag: '🇩🇪' },
+        'NL': { name: 'Нидерланды', flag: '🇳🇱' },
+        'PL': { name: 'Польша', flag: '🇵🇱' },
+        'FR': { name: 'Франция', flag: '🇫🇷' },
+        'RU': { name: 'Россия', flag: '🇷🇺' },
+        'SG': { name: 'Сингапур', flag: '🇸🇬' }
+      };
+
+      const counts = {};
       for (const resNode of reserveNodes) {
         let url = resNode.url;
-        const newRemark = resNode.country === 'DE' 
-          ? `🇩🇪 Германия | Резерв ${countDE++}` 
-          : `🇳🇱 Нидерланды | Резерв ${countNL++}`;
+        const cCode = resNode.country;
+        if (!counts[cCode]) counts[cCode] = 1;
+
+        const cInfo = countryNames[cCode] || { name: cCode, flag: '🌐' };
+        const newRemark = `${cInfo.flag} ${cInfo.name} | Резерв ${counts[cCode]++}`;
         
         if (url.includes('#')) {
           url = url.split('#')[0] + '#' + newRemark;
