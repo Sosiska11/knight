@@ -388,6 +388,39 @@ function isValidConfig(url) {
   }
 }
 
+// Helper to verify a single reserve candidate node
+async function verifySingleNode(line) {
+  try {
+    const cleanLine = sanitizeVlessUrl(line);
+    const match = cleanLine.match(/@([^:/]+):(\d+)/);
+    if (!match) return null;
+    const host = match[1];
+    const port = parseInt(match[2], 10);
+    
+    const sniMatch = cleanLine.match(/[?&]sni=([^&#]+)/);
+    const sni = sniMatch ? decodeURIComponent(sniMatch[1]) : '';
+    
+    // Fast check: TLS port open?
+    const isOnline = await pingTls(host, port, sni, 1500);
+    if (!isOnline) return null;
+
+    // Deep check: VLESS proxy working?
+    const works = await verifyVlessProxy(cleanLine);
+    if (!works) return null;
+
+    // ISP check: not a blocked provider?
+    const geo = await getGeoInfo(host);
+    if (geo && !isBlockedIsp(geo.org)) {
+      return { host, port, org: geo.org, sni, cleanLine };
+    } else {
+      console.log(`⏩ Skipped node on blocked/unknown ISP: ${host}:${port} | ISP: ${geo ? geo.org : 'UNKNOWN'}`);
+      return null;
+    }
+  } catch (err) {
+    return null;
+  }
+}
+
 // Function to fetch reserve nodes from goida-vpn-configs
 export async function fetchReserveNodes() {
   console.log('⏰ Fetching reserve public nodes from goida-vpn-configs...');
@@ -526,65 +559,32 @@ export async function fetchReserveNodes() {
     const deNodes = [];
     const nlNodes = [];
 
-    // Verify candidates to find up to 3 working ones for Germany
-    for (const line of uniqueDeQueue) {
-      if (deNodes.length >= 3) break;
-      const cleanLine = sanitizeVlessUrl(line);
-      const match = cleanLine.match(/@([^:/]+):(\d+)/);
-      if (!match) continue;
-      const host = match[1];
-      const port = parseInt(match[2], 10);
-      
-      const sniMatch = cleanLine.match(/[?&]sni=([^&#]+)/);
-      const sni = sniMatch ? decodeURIComponent(sniMatch[1]) : '';
-      
-      // Fast check: TLS port open?
-      const isOnline = await pingTls(host, port, sni, 1500);
-      if (isOnline) {
-        // Deep check: VLESS proxy working?
-        const works = await verifyVlessProxy(cleanLine);
-        if (works) {
-          // ISP check: not a blocked provider?
-          const geo = await getGeoInfo(host);
-          if (geo && !isBlockedIsp(geo.org)) {
-            console.log(`🟢 Added DE reserve node: ${host}:${port} | ISP: ${geo.org} | SNI: ${sni}`);
-            deNodes.push({ country: 'DE', url: cleanLine });
-          } else {
-            console.log(`⏩ Skipped DE node on blocked/unknown ISP: ${host}:${port} | ISP: ${geo ? geo.org : 'UNKNOWN'}`);
+    // Helper to process a queue in chunks of concurrent promises
+    async function processQueueInChunks(queue, limit, targetArray, countryCode) {
+      let index = 0;
+      while (targetArray.length < 3 && index < queue.length) {
+        const chunk = queue.slice(index, index + limit);
+        index += limit;
+
+        const promises = chunk.map(line => verifySingleNode(line));
+        const results = await Promise.all(promises);
+
+        for (const res of results) {
+          if (res) {
+            if (targetArray.length >= 3) break;
+            console.log(`🟢 Added ${countryCode} reserve node: ${res.host}:${res.port} | ISP: ${res.org} | SNI: ${res.sni}`);
+            targetArray.push({ country: countryCode, url: res.cleanLine });
           }
         }
       }
     }
 
-    // Verify candidates to find up to 3 working ones for Netherlands
-    for (const line of uniqueNlQueue) {
-      if (nlNodes.length >= 3) break;
-      const cleanLine = sanitizeVlessUrl(line);
-      const match = cleanLine.match(/@([^:/]+):(\d+)/);
-      if (!match) continue;
-      const host = match[1];
-      const port = parseInt(match[2], 10);
-      
-      const sniMatch = cleanLine.match(/[?&]sni=([^&#]+)/);
-      const sni = sniMatch ? decodeURIComponent(sniMatch[1]) : '';
-      
-      // Fast check: TLS port open?
-      const isOnline = await pingTls(host, port, sni, 1500);
-      if (isOnline) {
-        // Deep check: VLESS proxy working?
-        const works = await verifyVlessProxy(cleanLine);
-        if (works) {
-          // ISP check: not a blocked provider?
-          const geo = await getGeoInfo(host);
-          if (geo && !isBlockedIsp(geo.org)) {
-            console.log(`🟢 Added NL reserve node: ${host}:${port} | ISP: ${geo.org} | SNI: ${sni}`);
-            nlNodes.push({ country: 'NL', url: cleanLine });
-          } else {
-            console.log(`⏩ Skipped NL node on blocked/unknown ISP: ${host}:${port} | ISP: ${geo ? geo.org : 'UNKNOWN'}`);
-          }
-        }
-      }
-    }
+    // Verify candidates to find up to 3 working ones for Germany & Netherlands in parallel chunks
+    console.log(`⏳ Verifying DE candidate queue (${uniqueDeQueue.length} nodes) in chunks of 5...`);
+    await processQueueInChunks(uniqueDeQueue, 5, deNodes, 'DE');
+
+    console.log(`⏳ Verifying NL candidate queue (${uniqueNlQueue.length} nodes) in chunks of 5...`);
+    await processQueueInChunks(uniqueNlQueue, 5, nlNodes, 'NL');
 
     reserveNodes = [...deNodes, ...nlNodes];
     console.log(`✅ Cached ${reserveNodes.length} verified reserve nodes (DE: ${deNodes.length}, NL: ${nlNodes.length})`);
