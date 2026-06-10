@@ -325,7 +325,8 @@ function isBlockedIsp(ispName) {
   const lower = ispName.toLowerCase();
   const blockedKeywords = [
     'digitalocean', 'digital ocean', 'hetzner', 'ovh', 'linode', 'akamai',
-    'scaleway', 'cloudflare', 'leaseweb', 'm247', 'colocrossing', 'nexus'
+    'scaleway', 'cloudflare', 'leaseweb', 'm247', 'colocrossing', 'nexus',
+    'senko'
   ];
   return blockedKeywords.some(kw => lower.includes(kw));
 }
@@ -360,10 +361,12 @@ function isValidConfig(url) {
       
       // Block known bad/blocked/unstable SNIs in Russia (e.g. Google, Cloudflare, Yahoo, fuck.rkn, etc.)
       const lowerSni = sni.toLowerCase();
+      
       const blockedKeywords = [
         'google.com', 'youtube.com', 'cloudflare.com', 'yahoo.com', 
         'facebook.com', 'instagram.com', 'netflix.com', 'fuck', 'rkn',
-        'arvancloud', 'yandex', 'vk.com', 'gosuslugi', 'sberbank', 'mail.ru'
+        'arvancloud', 'yandex', 'vk.com', 'vk.ru', 'gosuslugi', 'sberbank', 'mail.ru',
+        'ok.ru', 'sber.ru', 'tinkoff.ru', 'rambler.ru', 'avito.ru'
       ];
       if (blockedKeywords.some(keyword => lowerSni.includes(keyword))) {
         return false;
