@@ -11,6 +11,7 @@ class XuiClient {
     this.cookie = null;
     this.csrfToken = null;
     this.sessionExpiry = null;
+    this.offlineNodes = new Set();
   }
 
   // Helper to check if session is still valid
@@ -265,6 +266,15 @@ class XuiClient {
       let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
       await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
 
+      // If first delete method returned 200 but failed, check if client was simply not found
+      if (response.status === 200 && response.data && !response.data.success) {
+        const msg = response.data.msg || '';
+        if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('not exist')) {
+          console.log(`✅ Client ${email} was not found on 3x-ui panel, considering it deleted.`);
+          return true;
+        }
+      }
+
       // If it fails or returns 404/405, try the older MHSanaei / FranzKafka endpoints as fallbacks
       if (response.status !== 200 || !response.data?.success) {
         console.warn(`⚠️ First delete method failed (${response.status}). Trying alternative...`);
@@ -284,6 +294,19 @@ class XuiClient {
       if (response.status === 200 && response.data?.success) {
         console.log(`✅ Client ${email} deleted from 3x-ui.`);
         return true;
+      }
+
+      // If fallback response status is 404 or it failed because of "not found" / "not exist"
+      if (response.status === 404) {
+        console.log(`✅ Client ${email} was not found (404) in fallback delete method, considering it deleted.`);
+        return true;
+      }
+      if (response.data && !response.data.success) {
+        const msg = response.data.msg || '';
+        if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('not exist')) {
+          console.log(`✅ Client ${email} not found in fallback delete method, considering it deleted.`);
+          return true;
+        }
       }
 
       throw new Error(response.data?.msg || `HTTP status ${response.status}`);
@@ -365,6 +388,43 @@ class XuiClient {
       console.error(`❌ Failed to get client IPs for ${email}:`, error.message);
       return [];
     }
+  }
+
+  // Get list of all nodes
+  async getNodes() {
+    if (this.mockMode) return [];
+
+    try {
+      const headers = await this.getHeaders();
+      const url = `${this.baseUrl}/panel/api/nodes/list`;
+      const response = await axios.get(url, { headers, timeout: 5000 });
+
+      if (response.data && response.data.success) {
+        return response.data.obj || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('❌ Failed to fetch nodes:', error.message);
+      return [];
+    }
+  }
+
+  markNodeOffline(address) {
+    this.offlineNodes.add(address);
+  }
+
+  markNodeOnline(address) {
+    this.offlineNodes.delete(address);
+  }
+
+  isNodeOffline(address) {
+    return this.offlineNodes.has(address);
+  }
+
+  isConfigSecure(url) {
+    if (!url) return true;
+    const insecurePattern = /[?&;](allowinsecure|allow_insecure|insecure)=(1|true|yes)/i;
+    return !insecurePattern.test(url);
   }
 }
 

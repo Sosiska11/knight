@@ -70,8 +70,7 @@ conn.on('ready', async () => {
       if (err) throw err;
 
       try {
-        // Upload root files
-        const rootFiles = ['.env', 'index.js', 'package.json', 'banner.png', 'database.db'];
+        const rootFiles = ['.env', 'index.js', 'package.json', 'banner.png'];
         for (const file of rootFiles) {
           const localPath = path.join(projectRoot, file);
           if (fs.existsSync(localPath)) {

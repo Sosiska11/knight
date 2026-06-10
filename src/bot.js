@@ -585,11 +585,26 @@ bot.action('get_static_key', async (ctx) => {
 <i>Нажмите на ключ выше, чтобы скопировать его в буфер обмена.</i>`;
 
   if (activeSub.bypass_connection_url) {
+    // Generate a working bypass URL on port 443 by replacing the SNI in connection_url
+    let staticBypassUrl = activeSub.bypass_connection_url || activeSub.connection_url;
+    if (staticBypassUrl.includes('sni=')) {
+      staticBypassUrl = staticBypassUrl.replace(/sni=[^&]+/g, 'sni=speedtest.net');
+    } else {
+      const parts = staticBypassUrl.split('?');
+      if (parts.length > 1) {
+        const queryAndHash = parts[1].split('#');
+        queryAndHash[0] = 'sni=speedtest.net&' + queryAndHash[0];
+        staticBypassUrl = parts[0] + '?' + queryAndHash.join('#');
+      }
+    }
+    // Set the remark for the bypass
+    staticBypassUrl = staticBypassUrl.split('#')[0] + '#📶 LTE | Резерв (Speedtest)';
+
     keyText += `\n\n🛡️ <b>Резервный ключ для обхода блокировок:</b>
-<code>${activeSub.bypass_connection_url}</code>
+<code>${staticBypassUrl}</code>
 
 <i>Используйте этот резервный ключ, если основной не подключается из-за блокировок вашего оператора.
-⚠️ <b>Внимание:</b> На обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов строго запрещено!</i>`;
+⚠️ <b>Внимание:</b> Резервный ключ оптимизирован для работы на мобильных сетях (LTE).</i>`;
   }
 
   keyText += `\n\n⚠️ <i>Используйте эти статические ключи только в том случае, если ваше приложение-клиент (например, v2rayNG или v2rayN) не поддерживает ссылки подписок.</i>`;

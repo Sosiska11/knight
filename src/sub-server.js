@@ -1,7 +1,12 @@
 import express from 'express';
 import axios from 'axios';
+import https from 'https';
+import http from 'http';
+import fs from 'fs';
 import * as db from './database.js';
 import config from './config.js';
+import xuiApi from './xui-api.js';
+import { reserveNodes } from './cron.js';
 
 const app = express();
 const PORT = config.SUB_PORT;
@@ -23,6 +28,10 @@ app.get('/sub/:uuid', async (req, res) => {
 
     // Set Headers for Hiddify, Shadowrocket, Sing-box, etc.
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('profile-update-interval', '1');
     // Encode unicode emoji safely for Node.js headers using binary/latin1 encoding
     res.setHeader('Profile-Title', Buffer.from('⚔️ Knight VPN').toString('binary'));
     res.setHeader('Profile-Notice', Buffer.from('⚠️ Резервный профиль (LTE) имеет лимит 15 ГБ. \\n🚫 Торренты строго запрещены! \\n🆘 Поддержка: @knightvpn_help').toString('binary'));
@@ -35,23 +44,102 @@ app.get('/sub/:uuid', async (req, res) => {
     );
 
     // Dynamically override the server name/remark with a beautiful name and flag
-    let connectionUrl = sub.connection_url;
-    if (connectionUrl.includes('#')) {
-      connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Нидерланды';
+    const mainHostMatch = sub.connection_url.match(/@([^:]+):/);
+    const mainHost = mainHostMatch ? mainHostMatch[1] : null;
+
+    let configsText = '';
+
+    if (!mainHost || !xuiApi.isNodeOffline(mainHost)) {
+      let connectionUrl = sub.connection_url;
+      if (connectionUrl.includes('#')) {
+        connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Нидерланды';
+      } else {
+        connectionUrl = connectionUrl + '#🇳🇱 Нидерланды';
+      }
+      configsText += connectionUrl + '\n';
     } else {
-      connectionUrl = connectionUrl + '#🇳🇱 Нидерланды';
+      console.log(`⏩ Skipping offline main node: ${mainHost}`);
     }
 
-    let configsText = connectionUrl + '\n';
+    // Fetch active nodes from 3x-ui and dynamically add VLESS links for them
+    try {
+      const nodes = await xuiApi.getNodes();
+      for (const node of nodes) {
+        if (node.address) {
+          // Check if this node is marked as offline
+          if (xuiApi.isNodeOffline(node.address)) {
+            console.log(`⏩ Skipping offline node: ${node.address}`);
+            continue;
+          }
 
-    if (sub.bypass_connection_url) {
-      let bypassUrl = sub.bypass_connection_url;
-      if (bypassUrl.includes('#')) {
-        bypassUrl = bypassUrl.split('#')[0] + '#🇷🇺 LTE | Обходка';
-      } else {
-        bypassUrl = bypassUrl + '#🇷🇺 LTE | Обходка';
+          // Replace host in connection_url with node.address
+          let nodeUrl = sub.connection_url.replace(/@([^:]+):/, `@${node.address}:`);
+          
+          // Set name/remark for the node (e.g. #🇩🇪 Германия)
+          const nodeRemark = node.remark || `Узел ${node.id}`;
+          nodeUrl = nodeUrl.split('#')[0] + '#' + nodeRemark;
+          
+          configsText += nodeUrl + '\n';
+        }
       }
-      configsText += bypassUrl + '\n';
+    } catch (nodeErr) {
+      console.error('⚠️ Failed to add dynamic nodes to subscription:', nodeErr.message);
+    }
+
+    // Generate multiple bypass links with different whitelisted SNIs
+    if (sub.bypass_connection_url) {
+      const sniBypasses = [
+        { name: 'Госуслуги', sni: 'gosuslugi.ru' },
+        { name: 'Сбербанк', sni: 'sberbank.ru' },
+        { name: 'Яндекс', sni: 'yandex.ru' },
+        { name: 'ВКонтакте', sni: 'vk.com' }
+      ];
+
+      for (const bp of sniBypasses) {
+        let bypassUrl = sub.bypass_connection_url || sub.connection_url;
+        
+        // Replace or add sni parameter
+        if (bypassUrl.includes('sni=')) {
+          bypassUrl = bypassUrl.replace(/sni=[^&]+/g, `sni=${bp.sni}`);
+        } else {
+          const parts = bypassUrl.split('?');
+          if (parts.length > 1) {
+            const queryAndHash = parts[1].split('#');
+            queryAndHash[0] = `sni=${bp.sni}&` + queryAndHash[0];
+            bypassUrl = parts[0] + '?' + queryAndHash.join('#');
+          }
+        }
+
+        // Set name/remark for the bypass
+        const newRemark = `🇷🇺 LTE | Обходка (${bp.name})`;
+        if (bypassUrl.includes('#')) {
+          bypassUrl = bypassUrl.split('#')[0] + '#' + newRemark;
+        } else {
+          bypassUrl = bypassUrl + '#' + newRemark;
+        }
+        configsText += bypassUrl + '\n';
+      }
+    }
+
+    // Add reserve nodes from goida-vpn-configs
+    try {
+      let countDE = 1;
+      let countNL = 1;
+      for (const resNode of reserveNodes) {
+        let url = resNode.url;
+        const newRemark = resNode.country === 'DE' 
+          ? `🇩🇪 Германия | Резерв ${countDE++}` 
+          : `🇳🇱 Нидерланды | Резерв ${countNL++}`;
+        
+        if (url.includes('#')) {
+          url = url.split('#')[0] + '#' + newRemark;
+        } else {
+          url = url + '#' + newRemark;
+        }
+        configsText += url + '\n';
+      }
+    } catch (resErr) {
+      console.error('⚠️ Failed to add reserve nodes to subscription:', resErr.message);
     }
 
     // Base64 encode the connection URLs (standard format for V2Ray subscriptions)
@@ -500,7 +588,25 @@ app.get('/import/:uuid', async (req, res) => {
 });
 
 export function startSubServer() {
-  app.listen(PORT, '0.0.0.0', () => {
+  const certPath = config.SSL_CERT_PATH;
+  const keyPath = config.SSL_KEY_PATH;
+
+  if (certPath && keyPath && fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+    try {
+      const options = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath)
+      };
+      https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
+        console.log(`🔒 SECURE Subscription server running on https://0.0.0.0:${PORT}`);
+      });
+      return;
+    } catch (err) {
+      console.error('⚠️ Failed to start secure subscription server, falling back to HTTP:', err.message);
+    }
+  }
+
+  http.createServer(app).listen(PORT, '0.0.0.0', () => {
     console.log(`🌐 Subscription server running on http://0.0.0.0:${PORT}`);
   });
 }

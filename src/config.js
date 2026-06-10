@@ -30,6 +30,8 @@ const databaseFile = process.env.DATABASE_FILE || './database.db';
 
 const subServerUrl = process.env.SUB_SERVER_URL || 'http://your-server-ip:3000';
 const subPort = parseInt(process.env.SUB_PORT || '3000', 10);
+const sslCertPath = process.env.SSL_CERT_PATH || '';
+const sslKeyPath = process.env.SSL_KEY_PATH || '';
 
 // Validation and warnings
 if (!botToken || botToken === 'YOUR_TELEGRAM_BOT_TOKEN') {
@@ -89,4 +91,6 @@ export default {
   SUB_SERVER_URL: subServerUrl,
   SUB_PORT: subPort,
   BOT_BANNER: botBanner,
+  SSL_CERT_PATH: sslCertPath,
+  SSL_KEY_PATH: sslKeyPath,
 };
