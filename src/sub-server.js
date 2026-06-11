@@ -98,6 +98,9 @@ app.get('/sub/:uuid', async (req, res) => {
       for (const bp of sniBypasses) {
         let bypassUrl = sub.bypass_connection_url || sub.connection_url;
         
+        // Rewrite port to 443 for fallback routing
+        bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, '@$1:443');
+
         // Replace or add sni parameter
         if (bypassUrl.includes('sni=')) {
           bypassUrl = bypassUrl.replace(/sni=[^&]+/g, `sni=${bp.sni}`);

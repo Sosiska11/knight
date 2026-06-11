@@ -63,7 +63,7 @@ conn.on('ready', async () => {
   try {
     // 1. Create remote directories
     console.log('Creating remote directories...');
-    await executeCommand(conn, `mkdir -p ${REMOTE_DIR}/src`);
+    await executeCommand(conn, `mkdir -p ${REMOTE_DIR}/src ${REMOTE_DIR}/scratch`);
 
     // 2. Start SFTP
     conn.sftp(async (err, sftp) => {
@@ -88,6 +88,12 @@ conn.on('ready', async () => {
           if (fs.statSync(localPath).isFile()) {
             await sftpUpload(sftp, localPath, `${REMOTE_DIR}/src/${file}`);
           }
+        }
+
+        // Upload scratch/migrate-all-bypass.js
+        const scratchLocalPath = path.join(projectRoot, 'scratch', 'migrate-all-bypass.js');
+        if (fs.existsSync(scratchLocalPath)) {
+          await sftpUpload(sftp, scratchLocalPath, `${REMOTE_DIR}/scratch/migrate-all-bypass.js`);
         }
 
         console.log('✅ File transfer completed successfully!');

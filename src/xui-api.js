@@ -2,6 +2,11 @@ import axios from 'axios';
 import crypto from 'crypto';
 import config from './config.js';
 
+function getBypassUuid(mainUuid) {
+  const hash = crypto.createHash('sha256').update(mainUuid).digest('hex');
+  return `${hash.substring(0, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}-${hash.substring(16, 20)}-${hash.substring(20, 32)}`;
+}
+
 class XuiClient {
   constructor() {
     this.baseUrl = config.XUI_URL ? config.XUI_URL.replace(/\/+$/, '') : '';
@@ -152,12 +157,13 @@ class XuiClient {
   async addClient(email, uuid = crypto.randomUUID(), limitIp = config.XUI_LIMIT_IP) {
     const inboundId = config.XUI_INBOUND_ID;
     const bypassInboundId = config.XUI_BYPASS_INBOUND_ID;
+    const bypassUuid = getBypassUuid(uuid);
 
     if (this.mockMode) {
       console.log(`[MOCK] Added client: email=${email}, uuid=${uuid}`);
       // Generate a mock Reality link
       const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
-      const mockBypassLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
+      const mockBypassLink = `vless://${bypassUuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
       return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink };
     }
 
@@ -205,7 +211,7 @@ class XuiClient {
         const bypassPayload = {
           inboundIds: [bypassInboundId],
           client: {
-            id: uuid,
+            id: bypassUuid,
             flow: 'xtls-rprx-vision',
             email: email + '_bp',
             limitIp: limitIp,
@@ -235,7 +241,7 @@ class XuiClient {
       const connectionUrl = await this.buildRealityLink(inboundId, uuid, email);
       let bypassConnectionUrl = null;
       if (bypassInboundId && addedBypass) {
-        bypassConnectionUrl = await this.buildRealityLink(bypassInboundId, uuid, email);
+        bypassConnectionUrl = await this.buildRealityLink(bypassInboundId, bypassUuid, email);
       }
       return { email, uuid, connectionUrl, bypassConnectionUrl };
     } catch (error) {
@@ -284,7 +290,8 @@ class XuiClient {
 
         // If bypass inbound is configured, clean it up as well
         if (config.XUI_BYPASS_INBOUND_ID) {
-          const bypassUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_BYPASS_INBOUND_ID}/delClient/${uuid}`;
+          const bypassUuid = getBypassUuid(uuid);
+          const bypassUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_BYPASS_INBOUND_ID}/delClient/${bypassUuid}`;
           await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
             console.warn(`⚠️ Failed to delete client from bypass inbound:`, err.message);
           });
@@ -321,7 +328,7 @@ class XuiClient {
     const inbound = await this.getInbound(inboundId);
     
     // Choose appropriate remark
-    const remark = inboundId === config.XUI_BYPASS_INBOUND_ID
+    const remark = email.endsWith('_bp')
       ? '🇷🇺 LTE | Обходка'
       : '🇳🇱 Нидерланды';
 
