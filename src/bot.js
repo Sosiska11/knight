@@ -284,18 +284,25 @@ const buyPlanAction = async (ctx, planId) => {
 
 // Show Instructions Menu
 async function showInstructions(ctx) {
-  const instructionsText = `⚙️ <b>Инструкция по подключению к Knight VPN</b>\n\n` +
-    `Выберите вашу операционную систему / устройство для настройки подключения:`;
+  const tgId = ctx.from.id;
+  const activeSub = await db.getActiveSubscription(tgId);
+  const webAppUrl = activeSub 
+    ? `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}` 
+    : `${config.SUB_SERVER_URL}/import`;
+
+  const instructionsText = `🚀 <b>Настройка Knight VPN — это очень просто!</b>\n\n` +
+    `Мы разработали интерактивного помощника, который поможет вам установить нужное приложение и подключить подписку всего за пару кликов.\n\n` +
+    `Выберите вариант:\n` +
+    `• Нажмите <b>«🚀 Начать установку»</b>, чтобы открыть пошаговые инструкции и скачать приложение для вашего устройства.\n` +
+    `• Если вы уже знаете, как настроить VPN, нажмите <b>«🔑 Получить ключ»</b>, чтобы скопировать ссылку подписки.`;
 
   const keyboard = {
     inline_keyboard: [
       [
-        { text: '🍏 iOS (iPhone/iPad)', callback_data: 'inst_ios' },
-        { text: '🤖 Android', callback_data: 'inst_android' }
+        { text: '🚀 Начать установку', web_app: { url: webAppUrl } }
       ],
       [
-        { text: '💻 Windows', callback_data: 'inst_windows' },
-        { text: '🍎 macOS', callback_data: 'inst_macos' }
+        { text: '🔑 Получить ключ', callback_data: 'get_key' }
       ],
       [
         { text: '🔙 Главное меню', callback_data: 'back_to_main' }
@@ -305,127 +312,6 @@ async function showInstructions(ctx) {
 
   await sendOrEditMessage(ctx, instructionsText, keyboard);
 }
-
-// Show specific OS instructions
-const showInstruction = (os) => async (ctx) => {
-  await ctx.answerCbQuery();
-
-  const tgId = ctx.from.id;
-  const activeSub = await db.getActiveSubscription(tgId);
-  const subUrl = activeSub ? `${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}` : null;
-  const autoImportUrl = subUrl ? `sing-box://import-remote?url=${encodeURIComponent(subUrl)}` : null;
-  const autoImportRedirectUrl = activeSub ? `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}` : null;
-
-  let text = '';
-  let inlineKeyboard = [];
-  
-  if (os === 'ios') {
-    text = `🍏 <b>Подключение на iOS (iPhone, iPad)</b>\n\n` +
-      `1️⃣ <b>Установите приложение Happ:</b>\n` +
-      `Нажмите кнопку <b>«Скачать из App Store»</b> ниже.\n\n` +
-      `2️⃣ <b>Добавьте подписку:</b>\n` +
-      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
-      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
-      `<i>Если авто-импорт не сработал:</i>\n` +
-      `• Скопируйте ссылку подписки вручную из раздела «👤 Мой профиль».\n` +
-      `• Откройте <b>Happ</b>, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта) и выберите <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
-      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
-      `3️⃣ <b>Подключитесь:</b>\n` +
-      `Нажмите круглую кнопку в центре экрана для запуска VPN. Разрешите системе добавить конфигурацию VPN.\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Приложение будет автоматически обновлять конфигурации.</i>`;
-
-    inlineKeyboard.push([{ text: '📥 App Store', url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215' }]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
-    }
-    inlineKeyboard.push([
-      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
-      { text: '🔙 Назад', callback_data: 'show_instructions' }
-    ]);
-
-  } else if (os === 'android') {
-    text = `🤖 <b>Подключение на Android</b>\n\n` +
-      `1️⃣ <b>Установите приложение Happ для Android:</b>\n` +
-      `Скачайте <b>APK-файл</b> напрямую по кнопке ниже.\n\n` +
-      `2️⃣ <b>Добавьте подписку:</b>\n` +
-      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
-      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
-      `<i>Если авто-импорт не сработал:</i>\n` +
-      `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
-      `• Откройте <b>Happ</b>, нажмите значок <b>➕</b> и выберите <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
-      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
-      `3️⃣ <b>Подключитесь:</b>\n` +
-      `Нажмите круглую кнопку в центре экрана для запуска VPN.\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Приложение будет автоматически обновлять конфигурации.</i>`;
-
-    inlineKeyboard.push([
-      { text: '📥 Скачать Happ (.apk)', url: 'https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk' }
-    ]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
-    }
-    inlineKeyboard.push([
-      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
-      { text: '🔙 Назад', callback_data: 'show_instructions' }
-    ]);
-
-  } else if (os === 'windows') {
-    text = `💻 <b>Подключение на Windows</b>\n\n` +
-      `1️⃣ <b>Установите приложение Happ для Windows:</b>\n` +
-      `Нажмите кнопку <b>«📥 Скачать для Windows»</b> ниже для перехода к скачиванию.\n\n` +
-      `2️⃣ <b>Добавьте подписку:</b>\n` +
-      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
-      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
-      `<i>Если авто-импорт не сработал:</i>\n` +
-      `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
-      `• В программе добавьте новый профиль из буфера обмена.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
-      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
-      `3️⃣ <b>Подключитесь:</b>\n` +
-      `Нажмите кнопку подключения для запуска VPN.\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Приложение будет автоматически обновлять конфигурации.</i>`;
-
-    inlineKeyboard.push([{ text: '📥 Скачать для Windows (.exe)', url: 'https://github.com/Happ-proxy/happ-desktop/releases/latest/download/setup-Happ.x64.exe' }]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
-    }
-    inlineKeyboard.push([
-      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
-      { text: '🔙 Назад', callback_data: 'show_instructions' }
-    ]);
-
-  } else if (os === 'macos') {
-    text = `🍎 <b>Подключение на macOS</b>\n\n` +
-      `1️⃣ <b>Установите приложение Happ:</b>\n` +
-      `Скачайте из App Store по кнопке ниже.\n\n` +
-      `2️⃣ <b>Добавьте подписку:</b>\n` +
-      `${activeSub ? `Нажмите на кнопку <b>«⚡️ Авто-импорт в Happ»</b> ниже (или на текстовую ссылку):\n` +
-      `👉 <a href="${autoImportUrl}"><b>НАЖМИТЕ ДЛЯ АВТО-ИМПОРТА</b></a>\n\n` +
-      `<i>Если авто-импорт не сработал:</i>\n` +
-      `• Скопируйте ссылку подписки вручную через раздел «👤 Мой профиль».\n` +
-      `• В программе <b>Happ</b> нажмите значок <b>➕</b> ➡️ <b>«Добавить из буфера обмена»</b>.` : `⚠️ <b>У вас нет активной подписки!</b>\n` +
-      `Активируйте тест или оформите подписку в меню 👤 <b>Мой профиль</b>, после чего здесь появится кнопка для автоматического импорта.`}\n\n` +
-      `3️⃣ <b>Подключитесь:</b>\n` +
-      `Нажмите кнопку включения в программе для запуска VPN.\n\n` +
-      `━━━━━━━━━━━━━━━━━━\n` +
-      `<i>Рекомендуется использовать официальное приложение Happ для автоматического обновления профилей.</i>`;
-
-    inlineKeyboard.push([
-      { text: '📥 App Store', url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215' }
-    ]);
-    if (autoImportRedirectUrl) {
-      inlineKeyboard.push([{ text: '⚡️ Авто-импорт в Happ', url: autoImportRedirectUrl }]);
-    }
-    inlineKeyboard.push([
-      { text: '🔑 Получить ключ', callback_data: 'get_key_from_inst' },
-      { text: '🔙 Назад', callback_data: 'show_instructions' }
-    ]);
-  }
-
-  await sendOrEditMessage(ctx, text, { inline_keyboard: inlineKeyboard });
-};
 
 // Show Support Info
 async function showSupport(ctx) {
@@ -528,40 +414,7 @@ bot.action('get_key', async (ctx) => {
   await sendOrEditMessage(ctx, keyText, keyboard);
 });
 
-bot.action('get_key_from_inst', async (ctx) => {
-  const tgId = ctx.from.id;
-  const activeSub = await db.getActiveSubscription(tgId);
 
-  if (!activeSub) {
-    return ctx.answerCbQuery('У вас нет активной подписки!', { show_alert: true });
-  }
-
-  await ctx.answerCbQuery();
-  
-  const keyText = `🔑 <b>Ваша персональная ссылка для подписки:</b>
-<code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
-
-<i>Нажмите на ссылку выше, чтобы скопировать её.</i>
-
-⚙️ <b>Быстрая настройка через Happ (рекомендуется):</b>
-1. Установите приложение <b>Happ</b> (ссылки для скачивания в разделе «⚙️ Инструкция»)
-2. Скопируйте вашу ссылку подписки выше
-3. Откройте приложение, нажмите значок <b>➕</b> в верхнем правом углу (или кнопку импорта)
-4. Выберите <b>«Добавить из буфера обмена»</b>
-5. Нажмите кнопку подключения в центре экрана
-
-⚠️ <b>Внимание:</b> На резервном обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов на обходном профиле строго запрещено!`;
-
-  const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: '⚡️ Установить в Happ', url: autoImportRedirectUrl }],
-      [{ text: '🔙 Назад к инструкциям', callback_data: 'show_instructions' }]
-    ]
-  };
-
-  await sendOrEditMessage(ctx, keyText, keyboard);
-});
 
 bot.action('activate_trial', async (ctx) => {
   const tgId = ctx.from.id;
@@ -747,10 +600,7 @@ bot.on('successful_payment', async (ctx) => {
   }
 });
 
-bot.action('inst_ios', showInstruction('ios'));
-bot.action('inst_android', showInstruction('android'));
-bot.action('inst_windows', showInstruction('windows'));
-bot.action('inst_macos', showInstruction('macos'));
+
 
 // --- ADMIN COMMANDS ---
 
