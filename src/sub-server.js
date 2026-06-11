@@ -95,6 +95,7 @@ app.get('/sub/:uuid', async (req, res) => {
         { name: 'ВКонтакте', sni: 'vk.com' }
       ];
 
+      let bpIndex = 1;
       for (const bp of sniBypasses) {
         let bypassUrl = sub.bypass_connection_url || sub.connection_url;
         
@@ -114,7 +115,7 @@ app.get('/sub/:uuid', async (req, res) => {
         }
 
         // Set name/remark for the bypass
-        const newRemark = `🇷🇺 LTE | Обходка (${bp.name})`;
+        const newRemark = `🇷🇺 LTE | Обходка #${bpIndex++}`;
         if (bypassUrl.includes('#')) {
           bypassUrl = bypassUrl.split('#')[0] + '#' + newRemark;
         } else {
