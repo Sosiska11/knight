@@ -28,6 +28,7 @@ const mockXui = process.env.MOCK_XUI === 'true';
 
 const databaseFile = process.env.DATABASE_FILE || './database.db';
 const bypassHost = process.env.BYPASS_HOST || '';
+const bypassPort = process.env.BYPASS_PORT || '8443';
 
 const subServerUrl = process.env.SUB_SERVER_URL || 'http://your-server-ip:3000';
 const subPort = parseInt(process.env.SUB_PORT || '3000', 10);
@@ -90,6 +91,7 @@ export default {
   MOCK_XUI: mockXui,
   DATABASE_FILE: databaseFile,
   BYPASS_HOST: bypassHost,
+  BYPASS_PORT: bypassPort,
   SUB_SERVER_URL: subServerUrl,
   SUB_PORT: subPort,
   BOT_BANNER: botBanner,

@@ -78,7 +78,8 @@ function vlessUrlToOutbound(vlessUrl) {
 
 // Config to test
 const testUrls = [
-  'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@79.137.162.56:8443?type=tcp&security=reality&pbk=9GVK-0TGvL88TQn-A6fltF-7Y7mgS89vPu4JXaPjrh0&fp=chrome&sni=max.ru&sid=16179c10&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка (max.ru)'
+  'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@79.137.162.56:16605?type=tcp&security=reality&pbk=9GVK-0TGvL88TQn-A6fltF-7Y7mgS89vPu4JXaPjrh0&fp=chrome&sni=max.ru&sid=16179c10&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка (16605 - sslh)',
+  'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@79.137.162.56:16606?type=tcp&security=reality&pbk=9GVK-0TGvL88TQn-A6fltF-7Y7mgS89vPu4JXaPjrh0&fp=chrome&sni=max.ru&sid=16179c10&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка (16606 - iptables)'
 ];
 
 const conn = new Client();

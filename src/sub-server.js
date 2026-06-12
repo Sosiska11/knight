@@ -110,8 +110,8 @@ app.get('/sub/:uuid', async (req, res) => {
       for (const bp of sniBypasses) {
         let bypassUrl = sub.bypass_connection_url || sub.connection_url;
         
-        // Rewrite port to 8443 for transit routing via iptables
-        bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, '@$1:8443');
+        // Rewrite port to BYPASS_PORT for transit routing
+        bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, `@$1:${config.BYPASS_PORT}`);
         
         // Resolve host to transit host or raw IP to bypass DNS blocking
         const hostMatch = bypassUrl.match(/@([^:]+):/);
