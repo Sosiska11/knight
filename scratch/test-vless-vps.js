@@ -62,6 +62,12 @@ function vlessUrlToOutbound(vlessUrl) {
         "spiderX": ""
       };
     }
+
+    if (type === 'grpc') {
+      outbound.streamSettings.grpcSettings = {
+        "serviceName": params.get('serviceName') || "grpc"
+      };
+    }
     
     return outbound;
   } catch (err) {
@@ -72,7 +78,7 @@ function vlessUrlToOutbound(vlessUrl) {
 
 // Config to test
 const testUrls = [
-  'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@127.0.0.1:443?type=tcp&security=reality&pbk=RWc0hf-pPEhU9h91ly1Dax4oFRSdOGzmtnqMZ6arfj8&fp=chrome&sni=gosuslugi.ru&sid=9d&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка (Госуслуги)'
+  'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@79.137.162.56:8443?type=tcp&security=reality&pbk=9GVK-0TGvL88TQn-A6fltF-7Y7mgS89vPu4JXaPjrh0&fp=chrome&sni=max.ru&sid=16179c10&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка (max.ru)'
 ];
 
 const conn = new Client();

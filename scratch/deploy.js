@@ -90,10 +90,13 @@ conn.on('ready', async () => {
           }
         }
 
-        // Upload scratch/migrate-all-bypass.js
-        const scratchLocalPath = path.join(projectRoot, 'scratch', 'migrate-all-bypass.js');
-        if (fs.existsSync(scratchLocalPath)) {
-          await sftpUpload(sftp, scratchLocalPath, `${REMOTE_DIR}/scratch/migrate-all-bypass.js`);
+        // Upload scratch files
+        const scratchFiles = ['migrate-all-bypass.js', 'configure-tcp-bypass-inbound.js'];
+        for (const file of scratchFiles) {
+          const localPath = path.join(projectRoot, 'scratch', file);
+          if (fs.existsSync(localPath)) {
+            await sftpUpload(sftp, localPath, `${REMOTE_DIR}/scratch/${file}`);
+          }
         }
 
         console.log('✅ File transfer completed successfully!');

@@ -208,11 +208,26 @@ class XuiClient {
       // 2. Add to Bypass Inbound
       let addedBypass = false;
       if (bypassInboundId) {
+        let bypassFlow = 'xtls-rprx-vision';
+        try {
+          const bpInbound = await this.getInbound(bypassInboundId);
+          if (bpInbound) {
+            const bpStreamSettings = typeof bpInbound.streamSettings === 'string'
+              ? JSON.parse(bpInbound.streamSettings)
+              : bpInbound.streamSettings;
+            if (bpStreamSettings.network === 'grpc') {
+              bypassFlow = '';
+            }
+          }
+        } catch (err) {
+          console.warn('⚠️ Failed to fetch bypass inbound details for flow selection:', err.message);
+        }
+
         const bypassPayload = {
           inboundIds: [bypassInboundId],
           client: {
             id: bypassUuid,
-            flow: 'xtls-rprx-vision',
+            flow: bypassFlow,
             email: email + '_bp',
             limitIp: limitIp,
             totalGB: config.XUI_BYPASS_LIMIT_GB > 0 ? config.XUI_BYPASS_LIMIT_GB * 1024 * 1024 * 1024 : 0,
@@ -350,6 +365,7 @@ class XuiClient {
         return `vless://${uuid}@${domain}:${port}?type=tcp&security=none#${remark}`;
       }
 
+      const type = streamSettings.network || 'tcp';
       const reality = streamSettings.realitySettings;
       const publicKey = reality.publicKey || reality.settings?.publicKey;
       const shortId = reality.shortIds?.[0] || '';
@@ -359,9 +375,16 @@ class XuiClient {
       // Parse domain from baseUrl or use IP
       let host = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
       
-      // If the panel has an external IP or domain set in inbound, we could use that, 
-      // but otherwise the host of the panel is the most reliable server IP.
-      const link = `vless://${uuid}@${host}:${port}?type=tcp&security=reality&pbk=${publicKey}&fp=${fp}&sni=${sni}&sid=${shortId}&flow=xtls-rprx-vision#${remark}`;
+      let link = `vless://${uuid}@${host}:${port}?type=${type}&security=reality&pbk=${publicKey}&fp=${fp}&sni=${sni}&sid=${shortId}`;
+      
+      if (type === 'tcp') {
+        link += `&flow=xtls-rprx-vision`;
+      } else if (type === 'grpc') {
+        const serviceName = streamSettings.grpcSettings?.serviceName || 'grpc';
+        link += `&serviceName=${serviceName}`;
+      }
+      
+      link += `#${remark}`;
       return link;
     } catch (err) {
       console.error('❌ Error parsing inbound settings to build link:', err);

@@ -38,11 +38,8 @@ conn.on('ready', async () => {
     console.log('\n--- Local Curl Test (from VPS itself) ---');
     await executeCommand(conn, 'curl -i http://localhost:3000/sub/test');
 
-    console.log('\n--- Checking Listening Ports ---');
-    await executeCommand(conn, 'ss -tulpn | grep 3000');
-
-    console.log('\n--- PM2 Logs (Last 20 lines) ---');
-    await executeCommand(conn, 'pm2 logs knight-vpn-bot --lines 20 --no-daemon');
+    console.log('\n--- Fetching and decoding real user subscription ---');
+    await executeCommand(conn, 'curl -k -s https://localhost:3000/sub/0803d6f0-d419-4368-a8b2-b9bdb287784f | base64 -d');
 
     conn.end();
   } catch (err) {

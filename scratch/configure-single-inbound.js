@@ -42,12 +42,13 @@ async function run() {
     console.log('🗑️ Removed fallbacks from settings.');
   }
 
-  // 2. Restore all serverNames in Inbound 1 Reality settings
+  // 2. Restore all serverNames in Inbound 1 Reality settings and set target to yandex.ru:443
   const streamSettings = typeof inbound1.streamSettings === 'string'
     ? JSON.parse(inbound1.streamSettings)
     : inbound1.streamSettings;
 
   if (streamSettings.realitySettings) {
+    streamSettings.realitySettings.target = "yandex.ru:443";
     streamSettings.realitySettings.serverNames = [
       "google.com",
       "speedtest.net",
@@ -55,11 +56,11 @@ async function run() {
       "samsung.com",
       "apple.com",
       "yandex.ru",
-      "gosuslugi.ru",
-      "sberbank.ru",
-      "vk.com"
+      "music.yandex.ru",
+      "passport.yandex.ru",
+      "disk.yandex.ru"
     ];
-    console.log('✅ Restored serverNames in Reality settings.');
+    console.log('✅ Updated target and serverNames in Reality settings.');
   }
 
   const payload = {

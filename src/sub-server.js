@@ -7,6 +7,7 @@ import * as db from './database.js';
 import config from './config.js';
 import xuiApi from './xui-api.js';
 import { reserveNodes } from './cron.js';
+import dns from 'dns';
 
 const app = express();
 const PORT = config.SUB_PORT;
@@ -100,19 +101,36 @@ app.get('/sub/:uuid', async (req, res) => {
     // Generate multiple bypass links with different whitelisted SNIs
     if (sub.bypass_connection_url) {
       const sniBypasses = [
-        { name: 'Госуслуги', sni: 'gosuslugi.ru' },
-        { name: 'Сбербанк', sni: 'sberbank.ru' },
-        { name: 'Яндекс', sni: 'yandex.ru' },
-        { name: 'ВКонтакте', sni: 'vk.com' }
+        { name: 'Gosuslugi', sni: 'gosuslugi.ru' },
+        { name: 'Yandex', sni: 'yandex.ru' },
+        { name: 'VK', sni: 'vk.com' },
+        { name: 'Mail.ru', sni: 'mail.ru' }
       ];
 
-      let bpIndex = 1;
       for (const bp of sniBypasses) {
         let bypassUrl = sub.bypass_connection_url || sub.connection_url;
         
-        // Rewrite port to 443 for fallback routing
-        bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, '@$1:443');
-
+        // Rewrite port to 8443 for transit routing via iptables
+        bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, '@$1:8443');
+        
+        // Resolve host to transit host or raw IP to bypass DNS blocking
+        const hostMatch = bypassUrl.match(/@([^:]+):/);
+        if (hostMatch) {
+          const hostName = hostMatch[1];
+          if (config.BYPASS_HOST) {
+            bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${config.BYPASS_HOST}:`);
+          } else if (!/^[0-9.]+$/.test(hostName)) {
+            try {
+              const resolved = await dns.promises.lookup(hostName);
+              if (resolved && resolved.address) {
+                bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${resolved.address}:`);
+              }
+            } catch (dnsErr) {
+              console.warn(`⚠️ Failed to resolve host ${hostName} for bypass link:`, dnsErr.message);
+            }
+          }
+        }
+        
         // Replace or add sni parameter
         if (bypassUrl.includes('sni=')) {
           bypassUrl = bypassUrl.replace(/sni=[^&]+/g, `sni=${bp.sni}`);
@@ -126,7 +144,7 @@ app.get('/sub/:uuid', async (req, res) => {
         }
 
         // Set name/remark for the bypass
-        const newRemark = `🇷🇺 LTE | Обходка #${bpIndex++}`;
+        const newRemark = `🇷🇺 LTE | Обходка (${bp.name})`;
         if (bypassUrl.includes('#')) {
           bypassUrl = bypassUrl.split('#')[0] + '#' + newRemark;
         } else {
