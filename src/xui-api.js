@@ -252,6 +252,37 @@ class XuiClient {
         }
       }
 
+      // 3. Add to CDN Inbound
+      if (config.XUI_CDN_INBOUND_ID) {
+        const cdnPayload = {
+          inboundIds: [config.XUI_CDN_INBOUND_ID],
+          client: {
+            id: bypassUuid,
+            flow: '',
+            email: email + '_bp',
+            limitIp: limitIp,
+            totalGB: config.XUI_BYPASS_LIMIT_GB > 0 ? config.XUI_BYPASS_LIMIT_GB * 1024 * 1024 * 1024 : 0,
+            expiryTime: 0,
+            enable: true,
+            tgId: 0,
+            subId: '',
+            comment: 'Bypass CDN WS profile'
+          }
+        };
+
+        try {
+          const cdnResponse = await axios.post(url, cdnPayload, { headers, timeout: 10000 });
+          if (cdnResponse.data && cdnResponse.data.success) {
+            console.log(`✅ Client ${email} added in 3x-ui to CDN inbound.`);
+            addedBypass = true; // Mark as added to at least one bypass inbound
+          } else {
+            console.warn(`⚠️ Failed to add client to CDN inbound: ${cdnResponse.data?.msg || 'Unknown panel error'}`);
+          }
+        } catch (err) {
+          console.error(`⚠️ Failed to add client to CDN inbound due to request error:`, err.message);
+        }
+      }
+
       // Attempt to build the Reality links automatically
       const connectionUrl = await this.buildRealityLink(inboundId, uuid, email);
       let bypassConnectionUrl = null;
@@ -309,6 +340,15 @@ class XuiClient {
           const bypassUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_BYPASS_INBOUND_ID}/delClient/${bypassUuid}`;
           await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
             console.warn(`⚠️ Failed to delete client from bypass inbound:`, err.message);
+          });
+        }
+
+        // If CDN inbound is configured, clean it up as well
+        if (config.XUI_CDN_INBOUND_ID) {
+          const bypassUuid = getBypassUuid(uuid);
+          const cdnUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_CDN_INBOUND_ID}/delClient/${bypassUuid}`;
+          await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+            console.warn(`⚠️ Failed to delete client from CDN inbound:`, err.message);
           });
         }
       }

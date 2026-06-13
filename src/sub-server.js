@@ -100,57 +100,78 @@ app.get('/sub/:uuid', async (req, res) => {
 
     // Generate multiple bypass links with different whitelisted SNIs
     if (sub.bypass_connection_url) {
-      const sniBypasses = [
-        { name: 'Gosuslugi', sni: 'gosuslugi.ru' },
-        { name: 'Yandex', sni: 'yandex.ru' },
-        { name: 'VK', sni: 'vk.com' },
-        { name: 'Mail.ru', sni: 'mail.ru' }
-      ];
-
-      for (const bp of sniBypasses) {
+      if (config.USE_CDN_BYPASS) {
+        // Generate CDN VLESS-WebSocket link
         let bypassUrl = sub.bypass_connection_url || sub.connection_url;
         
-        // Rewrite port to BYPASS_PORT for transit routing
-        bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, `@$1:${config.BYPASS_PORT}`);
+        // Match UUID from VLESS link
+        const uuidMatch = bypassUrl.match(/vless:\/\/([^@]+)@/);
+        const uuid = uuidMatch ? uuidMatch[1] : sub.client_uuid;
         
-        // Resolve host to transit host or raw IP to bypass DNS blocking
-        const hostMatch = bypassUrl.match(/@([^:]+):/);
-        if (hostMatch) {
-          const hostName = hostMatch[1];
-          if (config.BYPASS_HOST) {
-            bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${config.BYPASS_HOST}:`);
-          } else if (!/^[0-9.]+$/.test(hostName)) {
-            try {
-              const resolved = await dns.promises.lookup(hostName);
-              if (resolved && resolved.address) {
-                bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${resolved.address}:`);
+        const cdnHost = config.CDN_DOMAIN || config.BYPASS_HOST || 'your-cdn-domain.com';
+        const cdnPort = config.CDN_PORT || 80;
+        const cdnPath = encodeURIComponent(config.CDN_PATH || '/knight-ws');
+        
+        let cdnUrl = `vless://${uuid}@${cdnHost}:${cdnPort}?type=ws&security=none&path=${cdnPath}`;
+        if (config.CDN_DOMAIN) {
+          cdnUrl += `&host=${encodeURIComponent(config.CDN_DOMAIN)}`;
+        }
+        cdnUrl += `#🇷🇺 LTE | Обходка (CDN)`;
+        
+        configsText += cdnUrl + '\n';
+      } else {
+        const sniBypasses = [
+          { name: 'Gosuslugi', sni: 'gosuslugi.ru' },
+          { name: 'Yandex', sni: 'yandex.ru' },
+          { name: 'VK', sni: 'vk.com' },
+          { name: 'Mail.ru', sni: 'mail.ru' }
+        ];
+
+        for (const bp of sniBypasses) {
+          let bypassUrl = sub.bypass_connection_url || sub.connection_url;
+          
+          // Rewrite port to BYPASS_PORT for transit routing
+          bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, `@$1:${config.BYPASS_PORT}`);
+          
+          // Resolve host to transit host or raw IP to bypass DNS blocking
+          const hostMatch = bypassUrl.match(/@([^:]+):/);
+          if (hostMatch) {
+            const hostName = hostMatch[1];
+            if (config.BYPASS_HOST) {
+              bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${config.BYPASS_HOST}:`);
+            } else if (!/^[0-9.]+$/.test(hostName)) {
+              try {
+                const resolved = await dns.promises.lookup(hostName);
+                if (resolved && resolved.address) {
+                  bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${resolved.address}:`);
+                }
+              } catch (dnsErr) {
+                console.warn(`⚠️ Failed to resolve host ${hostName} for bypass link:`, dnsErr.message);
               }
-            } catch (dnsErr) {
-              console.warn(`⚠️ Failed to resolve host ${hostName} for bypass link:`, dnsErr.message);
             }
           }
-        }
-        
-        // Replace or add sni parameter
-        if (bypassUrl.includes('sni=')) {
-          bypassUrl = bypassUrl.replace(/sni=[^&]+/g, `sni=${bp.sni}`);
-        } else {
-          const parts = bypassUrl.split('?');
-          if (parts.length > 1) {
-            const queryAndHash = parts[1].split('#');
-            queryAndHash[0] = `sni=${bp.sni}&` + queryAndHash[0];
-            bypassUrl = parts[0] + '?' + queryAndHash.join('#');
+          
+          // Replace or add sni parameter
+          if (bypassUrl.includes('sni=')) {
+            bypassUrl = bypassUrl.replace(/sni=[^&]+/g, `sni=${bp.sni}`);
+          } else {
+            const parts = bypassUrl.split('?');
+            if (parts.length > 1) {
+              const queryAndHash = parts[1].split('#');
+              queryAndHash[0] = `sni=${bp.sni}&` + queryAndHash[0];
+              bypassUrl = parts[0] + '?' + queryAndHash.join('#');
+            }
           }
-        }
 
-        // Set name/remark for the bypass
-        const newRemark = `🇷🇺 LTE | Обходка (${bp.name})`;
-        if (bypassUrl.includes('#')) {
-          bypassUrl = bypassUrl.split('#')[0] + '#' + newRemark;
-        } else {
-          bypassUrl = bypassUrl + '#' + newRemark;
+          // Set name/remark for the bypass
+          const newRemark = `🇷🇺 LTE | Обходка (${bp.name})`;
+          if (bypassUrl.includes('#')) {
+            bypassUrl = bypassUrl.split('#')[0] + '#' + newRemark;
+          } else {
+            bypassUrl = bypassUrl + '#' + newRemark;
+          }
+          configsText += bypassUrl + '\n';
         }
-        configsText += bypassUrl + '\n';
       }
     }
 

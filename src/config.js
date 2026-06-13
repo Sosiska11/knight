@@ -22,6 +22,11 @@ const xuiUsername = process.env.XUI_USERNAME;
 const xuiPassword = process.env.XUI_PASSWORD;
 const xuiInboundId = parseInt(process.env.XUI_INBOUND_ID || '1', 10);
 const xuiBypassInboundId = process.env.XUI_BYPASS_INBOUND_ID ? parseInt(process.env.XUI_BYPASS_INBOUND_ID, 10) : null;
+const xuiCdnInboundId = process.env.XUI_CDN_INBOUND_ID ? parseInt(process.env.XUI_CDN_INBOUND_ID, 10) : null;
+const useCdnBypass = process.env.USE_CDN_BYPASS === 'true';
+const cdnDomain = process.env.CDN_DOMAIN || '';
+const cdnPath = process.env.CDN_PATH || '/knight-ws';
+const cdnPort = parseInt(process.env.CDN_PORT || '80', 10);
 const xuiBypassLimitGb = parseInt(process.env.XUI_BYPASS_LIMIT_GB || '0', 10);
 const xuiLimitIp = parseInt(process.env.XUI_LIMIT_IP || '1', 10);
 const mockXui = process.env.MOCK_XUI === 'true';
@@ -86,6 +91,11 @@ export default {
   XUI_PASSWORD: xuiPassword,
   XUI_INBOUND_ID: xuiInboundId,
   XUI_BYPASS_INBOUND_ID: xuiBypassInboundId,
+  XUI_CDN_INBOUND_ID: xuiCdnInboundId,
+  USE_CDN_BYPASS: useCdnBypass,
+  CDN_DOMAIN: cdnDomain,
+  CDN_PATH: cdnPath,
+  CDN_PORT: cdnPort,
   XUI_BYPASS_LIMIT_GB: xuiBypassLimitGb,
   XUI_LIMIT_IP: xuiLimitIp,
   MOCK_XUI: mockXui,
