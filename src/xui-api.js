@@ -259,7 +259,7 @@ class XuiClient {
           client: {
             id: bypassUuid,
             flow: '',
-            email: email + '_bp',
+            email: email + '_cdn',
             limitIp: limitIp,
             totalGB: config.XUI_BYPASS_LIMIT_GB > 0 ? config.XUI_BYPASS_LIMIT_GB * 1024 * 1024 * 1024 : 0,
             expiryTime: 0,
@@ -313,10 +313,12 @@ class XuiClient {
       // Try MHSanaei 3.x.x endpoint first: /panel/api/clients/del/{email}
       let url = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email)}`;
       let bypassUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_bp')}`;
-      console.log(`🗑️ Attempting to delete client ${email} and bypass client...`);
+      let cdnUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_cdn')}`;
+      console.log(`🗑️ Attempting to delete client ${email}, bypass and CDN client...`);
       
       let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
       await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
+      await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
 
       // If first delete method returned 200 but failed, check if client was simply not found
       if (response.status === 200 && response.data && !response.data.success) {
