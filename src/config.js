@@ -25,8 +25,12 @@ const xuiBypassInboundId = process.env.XUI_BYPASS_INBOUND_ID ? parseInt(process.
 const xuiCdnInboundId = process.env.XUI_CDN_INBOUND_ID ? parseInt(process.env.XUI_CDN_INBOUND_ID, 10) : null;
 const useCdnBypass = process.env.USE_CDN_BYPASS === 'true';
 const cdnDomain = process.env.CDN_DOMAIN || '';
-const cdnPath = process.env.CDN_PATH || '/knight-ws';
-const cdnPort = parseInt(process.env.CDN_PORT || '80', 10);
+const rawCdnPath = process.env.CDN_PATH || '/knight-down';
+const cdnPath = rawCdnPath.endsWith('/') ? rawCdnPath : `${rawCdnPath}/`;
+const cdnPort = parseInt(process.env.CDN_PORT || '443', 10);
+const rawXhttpPath = process.env.XHTTP_PATH || '/knight-down';
+const xhttpPath = rawXhttpPath.replace(/\/+$/, '') || '/knight-down';
+const xhttpMode = process.env.XHTTP_MODE || 'packet-up';
 const xuiBypassLimitGb = parseInt(process.env.XUI_BYPASS_LIMIT_GB || '0', 10);
 const xuiLimitIp = parseInt(process.env.XUI_LIMIT_IP || '1', 10);
 const mockXui = process.env.MOCK_XUI === 'true';
@@ -96,6 +100,8 @@ export default {
   CDN_DOMAIN: cdnDomain,
   CDN_PATH: cdnPath,
   CDN_PORT: cdnPort,
+  XHTTP_PATH: xhttpPath,
+  XHTTP_MODE: xhttpMode,
   XUI_BYPASS_LIMIT_GB: xuiBypassLimitGb,
   XUI_LIMIT_IP: xuiLimitIp,
   MOCK_XUI: mockXui,

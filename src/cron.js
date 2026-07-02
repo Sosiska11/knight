@@ -28,6 +28,7 @@ function sanitizeVlessUrl(vlessUrl) {
     const cleanParams = new URLSearchParams();
 
     const allowedKeys = [
+      'encryption',
       'security',
       'sni',
       'pbk',
@@ -39,7 +40,8 @@ function sanitizeVlessUrl(vlessUrl) {
       'mode',
       'headerType',
       'serviceName',
-      'host'
+      'host',
+      'spx'
     ];
 
     for (const key of allowedKeys) {
@@ -57,6 +59,11 @@ function sanitizeVlessUrl(vlessUrl) {
       if (cleanAlpn.length > 0) {
         cleanParams.set('alpn', cleanAlpn.join(','));
       }
+    }
+
+    // Ensure encryption=none is always present (required by Hiddify/HAPP sing-box core)
+    if (!cleanParams.has('encryption')) {
+      cleanParams.set('encryption', 'none');
     }
 
     const portPart = port ? `:${port}` : '';

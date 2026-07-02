@@ -8,6 +8,7 @@ import config from './config.js';
 import xuiApi from './xui-api.js';
 import { reserveNodes } from './cron.js';
 import dns from 'dns';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = config.SUB_PORT;
@@ -55,155 +56,107 @@ app.get('/sub/:uuid', async (req, res) => {
       `upload=0; download=0; total=1099511627776; expire=${expireTimestamp}`
     );
 
+    const testMode = req.query.test || ''; // 'main', 'de', 'ru', 'clean' or empty
+
     // Dynamically override the server name/remark with a beautiful name and flag
     const mainHostMatch = sub.connection_url.match(/@([^:]+):/);
     const mainHost = mainHostMatch ? mainHostMatch[1] : null;
 
     let configsText = '';
 
-    if (!mainHost || !xuiApi.isNodeOffline(mainHost)) {
-      let connectionUrl = sub.connection_url;
-      if (connectionUrl.includes('#')) {
-        connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Нидерланды';
+    const showMain = !testMode || testMode === 'main' || testMode === 'clean';
+
+    if (showMain) {
+      if (!mainHost || !xuiApi.isNodeOffline(mainHost)) {
+        let connectionUrl = sub.connection_url;
+        if (connectionUrl.includes('#')) {
+          connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Нидерланды';
+        } else {
+          connectionUrl = connectionUrl + '#🇳🇱 Нидерланды';
+        }
+        configsText += connectionUrl + '\n';
       } else {
-        connectionUrl = connectionUrl + '#🇳🇱 Нидерланды';
+        console.log(`⏩ Skipping offline main node: ${mainHost}`);
       }
-      configsText += connectionUrl + '\n';
-    } else {
-      console.log(`⏩ Skipping offline main node: ${mainHost}`);
+
+      // Fetch active nodes from 3x-ui and dynamically add VLESS links for them
+      try {
+        const nodes = await xuiApi.getNodes();
+        for (const node of nodes) {
+          if (node.address) {
+            // Check if this node is marked as offline
+            if (xuiApi.isNodeOffline(node.address)) {
+              console.log(`⏩ Skipping offline node: ${node.address}`);
+              continue;
+            }
+
+            // Replace host in connection_url with node.address
+            let nodeUrl = sub.connection_url.replace(/@([^:]+):/, `@${node.address}:`);
+            
+            // Set name/remark for the node (e.g. #🇩🇪 Германия)
+            const nodeRemark = node.remark || `Узел ${node.id}`;
+            nodeUrl = nodeUrl.split('#')[0] + '#' + nodeRemark;
+            
+            configsText += nodeUrl + '\n';
+          }
+        }
+      } catch (nodeErr) {
+        console.error('⚠️ Failed to add dynamic nodes to subscription:', nodeErr.message);
+      }
     }
 
-    // Fetch active nodes from 3x-ui and dynamically add VLESS links for them
-    try {
-      const nodes = await xuiApi.getNodes();
-      for (const node of nodes) {
-        if (node.address) {
-          // Check if this node is marked as offline
-          if (xuiApi.isNodeOffline(node.address)) {
-            console.log(`⏩ Skipping offline node: ${node.address}`);
-            continue;
-          }
-
-          // Replace host in connection_url with node.address
-          let nodeUrl = sub.connection_url.replace(/@([^:]+):/, `@${node.address}:`);
-          
-          // Set name/remark for the node (e.g. #🇩🇪 Германия)
-          const nodeRemark = node.remark || `Узел ${node.id}`;
-          nodeUrl = nodeUrl.split('#')[0] + '#' + nodeRemark;
-          
-          configsText += nodeUrl + '\n';
-        }
+    // Add bypass configuration (XHTTP CDN)
+    if (!testMode || testMode === 'ru') {
+      let bypassUuid = null;
+      if (sub.bypass_connection_url) {
+        const uuidMatch = sub.bypass_connection_url.match(/vless:\/\/([^@]+)@/);
+        if (uuidMatch) bypassUuid = uuidMatch[1];
       }
-    } catch (nodeErr) {
-      console.error('⚠️ Failed to add dynamic nodes to subscription:', nodeErr.message);
-    }
+      if (!bypassUuid && sub.client_uuid) {
+        const hash = crypto.createHash('sha256').update(sub.client_uuid).digest('hex');
+        bypassUuid = `${hash.substring(0, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}-${hash.substring(16, 20)}-${hash.substring(20, 32)}`;
+      }
 
-    // Generate multiple bypass links with different whitelisted SNIs
-    if (sub.bypass_connection_url) {
-      if (config.USE_CDN_BYPASS) {
-        // Generate CDN VLESS-WebSocket link
-        let bypassUrl = sub.bypass_connection_url || sub.connection_url;
-        
-        // Match UUID from VLESS link
-        const uuidMatch = bypassUrl.match(/vless:\/\/([^@]+)@/);
-        const uuid = uuidMatch ? uuidMatch[1] : sub.client_uuid;
-        
-        const cdnHost = config.CDN_DOMAIN || config.BYPASS_HOST || 'your-cdn-domain.com';
-        const cdnPort = config.CDN_PORT || 80;
-        const cdnPath = encodeURIComponent(config.CDN_PATH || '/knight-ws');
-        
-        let cdnUrl = `vless://${uuid}@${cdnHost}:${cdnPort}?type=ws&security=none&path=${cdnPath}`;
-        if (config.CDN_DOMAIN) {
-          cdnUrl += `&host=${encodeURIComponent(config.CDN_DOMAIN)}`;
-        }
-        cdnUrl += `#🇷🇺 LTE | Обходка (CDN)`;
-        
-        configsText += cdnUrl + '\n';
-      } else {
-        const sniBypasses = [
-          { name: 'Gosuslugi', sni: 'gosuslugi.ru' },
-          { name: 'Yandex', sni: 'yandex.ru' },
-          { name: 'VK', sni: 'vk.com' },
-          { name: 'Mail.ru', sni: 'mail.ru' }
-        ];
-
-        for (const bp of sniBypasses) {
-          let bypassUrl = sub.bypass_connection_url || sub.connection_url;
-          
-          // Rewrite port to BYPASS_PORT for transit routing
-          bypassUrl = bypassUrl.replace(/@([^:]+):([0-9]+)/, `@$1:${config.BYPASS_PORT}`);
-          
-          // Resolve host to transit host or raw IP to bypass DNS blocking
-          const hostMatch = bypassUrl.match(/@([^:]+):/);
-          if (hostMatch) {
-            const hostName = hostMatch[1];
-            if (config.BYPASS_HOST) {
-              bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${config.BYPASS_HOST}:`);
-            } else if (!/^[0-9.]+$/.test(hostName)) {
-              try {
-                const resolved = await dns.promises.lookup(hostName);
-                if (resolved && resolved.address) {
-                  bypassUrl = bypassUrl.replace(`@${hostName}:`, `@${resolved.address}:`);
-                }
-              } catch (dnsErr) {
-                console.warn(`⚠️ Failed to resolve host ${hostName} for bypass link:`, dnsErr.message);
-              }
-            }
-          }
-          
-          // Replace or add sni parameter
-          if (bypassUrl.includes('sni=')) {
-            bypassUrl = bypassUrl.replace(/sni=[^&]+/g, `sni=${bp.sni}`);
-          } else {
-            const parts = bypassUrl.split('?');
-            if (parts.length > 1) {
-              const queryAndHash = parts[1].split('#');
-              queryAndHash[0] = `sni=${bp.sni}&` + queryAndHash[0];
-              bypassUrl = parts[0] + '?' + queryAndHash.join('#');
-            }
-          }
-
-          // Set name/remark for the bypass
-          const newRemark = `🇷🇺 LTE | Обходка (${bp.name})`;
-          if (bypassUrl.includes('#')) {
-            bypassUrl = bypassUrl.split('#')[0] + '#' + newRemark;
-          } else {
-            bypassUrl = bypassUrl + '#' + newRemark;
-          }
-          configsText += bypassUrl + '\n';
-        }
+      if (bypassUuid) {
+        const bypassUrl = xuiApi.buildXhttpLink(bypassUuid);
+        configsText += bypassUrl + '\n';
       }
     }
 
     // Add reserve nodes from goida-vpn-configs
-    try {
-      const countryNames = {
-        'DE': { name: 'Германия', flag: '🇩🇪' },
-        'NL': { name: 'Нидерланды', flag: '🇳🇱' },
-        'PL': { name: 'Польша', flag: '🇵🇱' },
-        'FR': { name: 'Франция', flag: '🇫🇷' },
-        'RU': { name: 'Россия', flag: '🇷🇺' },
-        'SG': { name: 'Сингапур', flag: '🇸🇬' }
-      };
+    if (!testMode || testMode === 'de' || testMode === 'ru') {
+      try {
+        const countryNames = {
+          'DE': { name: 'Германия', flag: '🇩🇪' },
+          'NL': { name: 'Нидерланды', flag: '🇳🇱' },
+          'PL': { name: 'Польша', flag: '🇵🇱' },
+          'FR': { name: 'Франция', flag: '🇫🇷' },
+          'RU': { name: 'Россия', flag: '🇷🇺' },
+          'SG': { name: 'Сингапур', flag: '🇸🇬' }
+        };
 
-      const counts = {};
-      for (const resNode of reserveNodes) {
-        let url = resNode.url;
-        const cCode = resNode.country;
-        if (!counts[cCode]) counts[cCode] = 1;
+        const counts = {};
+        for (const resNode of reserveNodes) {
+          const cCode = resNode.country;
+          if (testMode === 'de' && cCode !== 'DE') continue;
+          if (testMode === 'ru' && cCode !== 'RU') continue;
 
-        const cInfo = countryNames[cCode] || { name: cCode, flag: '🌐' };
-        const newRemark = `${cInfo.flag} ${cInfo.name} | Резерв ${counts[cCode]++}`;
-        
-        if (url.includes('#')) {
-          url = url.split('#')[0] + '#' + newRemark;
-        } else {
-          url = url + '#' + newRemark;
+          let url = resNode.url;
+          if (!counts[cCode]) counts[cCode] = 1;
+
+          const cInfo = countryNames[cCode] || { name: cCode, flag: '🌐' };
+          const newRemark = `${cInfo.flag} ${cInfo.name} | Резерв ${counts[cCode]++}`;
+          
+          if (url.includes('#')) {
+            url = url.split('#')[0] + '#' + newRemark;
+          } else {
+            url = url + '#' + newRemark;
+          }
+          configsText += url + '\n';
         }
-        configsText += url + '\n';
+      } catch (resErr) {
+        console.error('⚠️ Failed to add reserve nodes to subscription:', resErr.message);
       }
-    } catch (resErr) {
-      console.error('⚠️ Failed to add reserve nodes to subscription:', resErr.message);
     }
 
     // Base64 encode the connection URLs (standard format for V2Ray subscriptions)
@@ -214,6 +167,31 @@ app.get('/sub/:uuid', async (req, res) => {
     console.error('Subscription server error:', error);
     res.status(500).send('Internal server error.');
   }
+});
+
+app.get('/redirect', (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) {
+    return res.status(400).send('Missing url parameter');
+  }
+  
+  res.send(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting...</title>
+    <script>
+        window.onload = function() {
+            window.location.href = ${JSON.stringify(targetUrl)};
+        };
+    </script>
+</head>
+<body>
+    <p>Redirecting, please wait... If nothing happens, <a href="${targetUrl}">click here</a>.</p>
+</body>
+</html>
+  `);
 });
 
 app.get('/import/:uuid?', async (req, res) => {
@@ -241,6 +219,7 @@ app.get('/import/:uuid?', async (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Инструкция по установке | Knight VPN</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -731,6 +710,23 @@ app.get('/import/:uuid?', async (req, res) => {
         const cryptoUrl = "${cryptoUrl}";
         const hasSub = !!subUrl;
 
+        function openExternalUrl(url) {
+            if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+                window.Telegram.WebApp.openLink(url);
+            } else {
+                window.open(url, '_blank');
+            }
+        }
+
+        function openSchemeUrl(schemeUrl) {
+            if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+                const redirectUrl = window.location.origin + "/redirect?url=" + encodeURIComponent(schemeUrl);
+                window.Telegram.WebApp.openLink(redirectUrl);
+            } else {
+                window.location.href = schemeUrl;
+            }
+        }
+
         const appData = {
             ios: [
                 {
@@ -954,9 +950,9 @@ app.get('/import/:uuid?', async (req, res) => {
                     '<div class="step-number">1</div>' +
                     '<div class="step-title">Установка приложения</div>' +
                     '<div class="step-desc">' + app.step1_desc + '</div>' +
-                    '<a href="' + app.btn_download_url + '" target="_blank" class="btn-action">' + app.btn_download_text + '</a>';
+                    '<a href="' + app.btn_download_url + '" onclick="openExternalUrl(this.href); return false;" class="btn-action">' + app.btn_download_text + '</a>';
             if (app.btn_download_url2) {
-                step1Html += '<a href="' + app.btn_download_url2 + '" target="_blank" class="btn-action-outline">' + app.btn_download_text2 + '</a>';
+                step1Html += '<a href="' + app.btn_download_url2 + '" onclick="openExternalUrl(this.href); return false;" class="btn-action-outline">' + app.btn_download_text2 + '</a>';
             }
             step1Html += '</div>';
 
@@ -1004,35 +1000,35 @@ app.get('/import/:uuid?', async (req, res) => {
         function importHapp() {
             if (!hasSub) return;
             if (cryptoUrl) {
-                window.location.href = cryptoUrl;
+                openSchemeUrl(cryptoUrl);
                 setTimeout(function() {
-                    window.location.href = "happ://add/" + subUrl;
+                    openSchemeUrl("happ://add/" + subUrl);
                 }, 1500);
                 return;
             }
 
-            window.location.href = "happ://add/" + subUrl;
-            setTimeout(function() { window.location.href = "happ-proxy://add/" + subUrl; }, 150);
-            setTimeout(function() { window.location.href = "happ-proxy-utility://add/" + subUrl; }, 300);
-            setTimeout(function() { window.location.href = "happ://import/#" + subUrl; }, 450);
-            setTimeout(function() { window.location.href = "happ-proxy://import/#" + subUrl; }, 600);
-            setTimeout(function() { window.location.href = "happ://yargs?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN"; }, 750);
-            setTimeout(function() { window.location.href = "happ://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN"; }, 900);
+            openSchemeUrl("happ://add/" + subUrl);
+            setTimeout(function() { openSchemeUrl("happ-proxy://add/" + subUrl); }, 150);
+            setTimeout(function() { openSchemeUrl("happ-proxy-utility://add/" + subUrl); }, 300);
+            setTimeout(function() { openSchemeUrl("happ://import/#" + subUrl); }, 450);
+            setTimeout(function() { openSchemeUrl("happ-proxy://import/#" + subUrl); }, 600);
+            setTimeout(function() { openSchemeUrl("happ://yargs?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN"); }, 750);
+            setTimeout(function() { openSchemeUrl("happ://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN"); }, 900);
         }
 
         function importSingBox() {
             if (!hasSub) return;
-            window.location.href = "sing-box://import-remote?url=" + encodeURIComponent(subUrl);
+            openSchemeUrl("sing-box://import-remote?url=" + encodeURIComponent(subUrl));
         }
 
         function importShadowrocket() {
             if (!hasSub) return;
-            window.location.href = "shadowrocket://add/" + subUrl;
+            openSchemeUrl("shadowrocket://add/" + subUrl);
         }
 
         function importHiddify() {
             if (!hasSub) return;
-            window.location.href = "hiddify://import/#" + subUrl;
+            openSchemeUrl("hiddify://import/#" + subUrl);
         }
 
         function copySubUrl() {
@@ -1052,6 +1048,9 @@ app.get('/import/:uuid?', async (req, res) => {
 
         // Initialize setup
         selectOS('ios');
+        if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+        }
     </script>
 </body>
 </html>

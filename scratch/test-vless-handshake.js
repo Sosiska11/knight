@@ -112,12 +112,7 @@ function testVlessNode(vlessUrl) {
 
 // Test with the parsed reserves we saw earlier
 const testUrls = [
-  // Germany 1
-  'vless://e65c9135-5c62-4e63-9bec-bca0cdf94f52@167.172.108.83:443?encryption=none&flow=xtls-rprx-vision&fp=firefox&pbk=YIwwnfgqZKzbdxD0Mq-PiOmIDPYCvkaptHyN_HzDgFA&security=reality&sid=844282e475538c&sni=icloud.com&spx=%2FwkBfIEIhNxYDFMj&type=tcp#🇩🇪 Германия | Резерв 1',
-  // Germany 2
-  'vless://181bc4ca-c88b-459e-979c-d6a77fa7a05a@167.172.108.83:443?encryption=none&flow=xtls-rprx-vision&fp=chrome&pbk=YIwwnfgqZKzbdxD0Mq-PiOmIDPYCvkaptHyN_HzDgFA&security=reality&sid=c3d77ad7c9&sni=icloud.com&spx=/HPikIP6gewFWkRW&type=tcp#🇩🇪 Германия | Резерв 2',
-  // Netherlands 1
-  'vless://b54d36d1-43c3-4b8f-a5f8-cf6504db0562@144.31.233.236:9443?type=tcp&security=reality&flow=xtls-rprx-vision&fp=firefox&pbk=MbYR2O0XBSeG74gGYpFIofXsILcf5lG2gc36GyURBXQ&sid=0199436dd359351b&sni=apple.com#🇳🇱 Нидерланды | Резерв 1'
+  'vless://0803d6f0-d419-4368-a8b2-b9bdb287784f@knight1.space:443?encryption=none&type=tcp&security=reality&pbk=RWc0hf-pPEhU9h91ly1Dax4oFRSdOGzmtnqMZ6arfj8&fp=chrome&sni=samsung.com&sid=9d&flow=xtls-rprx-vision#🇳🇱 Нидерланды'
 ];
 
 async function runTests() {

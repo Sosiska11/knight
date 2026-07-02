@@ -1,0 +1,92 @@
+{
+  "id": 4,
+  "up": 398513,
+  "down": 2063811,
+  "total": 0,
+  "remark": "System Assets Inbound",
+  "enable": true,
+  "expiryTime": 0,
+  "trafficReset": "",
+  "lastTrafficResetTime": 0,
+  "clientStats": [
+    {
+      "id": 101,
+      "inboundId": 4,
+      "enable": true,
+      "email": "vpn_user_797540993_cdn",
+      "uuid": "985e730a-42aa-441f-88a0-d9223e6da8b1",
+      "subId": "3cfafb71-7b90-44c9-b3f7-fe5274791bda",
+      "up": 354425,
+      "down": 2062473,
+      "expiryTime": 0,
+      "total": 16106127360,
+      "reset": 0,
+      "lastOnline": 1781707832050
+    },
+    {
+      "id": 102,
+      "inboundId": 4,
+      "enable": true,
+      "email": "vpn_user_1408185683_cdn",
+      "uuid": "252be4ca-a78b-6732-94f1-b3f9a6f964cc",
+      "subId": "9a6fefe5-3e1b-4c47-8774-73a4897010f8",
+      "up": 0,
+      "down": 0,
+      "expiryTime": 0,
+      "total": 16106127360,
+      "reset": 0,
+      "lastOnline": 0
+    }
+  ],
+  "listen": "127.0.0.1",
+  "port": 8080,
+  "protocol": "vless",
+  "tag": "in-8080-tcp",
+  "settings": {
+    "clients": [
+      {
+        "comment": "Bypass CDN XHTTP profile",
+        "created_at": 1781456934000,
+        "email": "vpn_user_797540993_cdn",
+        "enable": true,
+        "expiryTime": 0,
+        "flow": "",
+        "id": "985e730a-42aa-441f-88a0-d9223e6da8b1",
+        "limitIp": 2,
+        "subId": "3cfafb71-7b90-44c9-b3f7-fe5274791bda",
+        "tgId": 0,
+        "totalGB": 16106127360
+      },
+      {
+        "comment": "Bypass CDN XHTTP profile",
+        "created_at": 1781456934000,
+        "email": "vpn_user_1408185683_cdn",
+        "enable": true,
+        "expiryTime": 0,
+        "flow": "",
+        "id": "252be4ca-a78b-6732-94f1-b3f9a6f964cc",
+        "limitIp": 1,
+        "subId": "9a6fefe5-3e1b-4c47-8774-73a4897010f8",
+        "tgId": 0,
+        "totalGB": 16106127360
+      }
+    ],
+    "decryption": "none",
+    "fallbacks": []
+  },
+  "streamSettings": {
+    "network": "ws",
+    "security": "none",
+    "wsSettings": {
+      "path": "/knight-ws",
+      "headers": {}
+    }
+  },
+  "sniffing": {
+    "enabled": true,
+    "destOverride": [
+      "http",
+      "tls"
+    ]
+  }
+}

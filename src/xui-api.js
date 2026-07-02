@@ -112,9 +112,11 @@ class XuiClient {
       throw new Error(`Invalid credentials or unexpected response structure. Status: ${response.status}`);
     } catch (error) {
       console.error('❌ 3x-ui Login failed:', error.message);
-      // Fallback to mock mode so bot doesn't crash
-      console.warn('⚠️ Switching to MOCK MODE due to connection failure.');
-      this.mockMode = true;
+      // Fallback to mock mode only if configured, otherwise allow retries next time
+      if (config.MOCK_XUI) {
+        console.warn('⚠️ Switching to MOCK MODE due to connection failure.');
+        this.mockMode = true;
+      }
       return false;
     }
   }
@@ -162,8 +164,8 @@ class XuiClient {
     if (this.mockMode) {
       console.log(`[MOCK] Added client: email=${email}, uuid=${uuid}`);
       // Generate a mock Reality link
-      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
-      const mockBypassLink = `vless://${bypassUuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
+      const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
+      const mockBypassLink = `vless://${bypassUuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
       return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink };
     }
 
@@ -266,7 +268,7 @@ class XuiClient {
             enable: true,
             tgId: 0,
             subId: '',
-            comment: 'Bypass CDN WS profile'
+            comment: 'Bypass CDN XHTTP profile'
           }
         };
 
@@ -286,15 +288,17 @@ class XuiClient {
       // Attempt to build the Reality links automatically
       const connectionUrl = await this.buildRealityLink(inboundId, uuid, email);
       let bypassConnectionUrl = null;
-      if (bypassInboundId && addedBypass) {
+      if (config.XUI_CDN_INBOUND_ID && addedBypass) {
+        bypassConnectionUrl = this.buildXhttpLink(bypassUuid);
+      } else if (bypassInboundId && addedBypass) {
         bypassConnectionUrl = await this.buildRealityLink(bypassInboundId, bypassUuid, email);
       }
       return { email, uuid, connectionUrl, bypassConnectionUrl };
     } catch (error) {
       console.error(`❌ Failed to add client ${email} in 3x-ui:`, error.message);
       // Generate fallback key so user gets SOMETHING and we can debug
-      const mockLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
-      const mockBypassLink = `vless://${uuid}@your-server.com:443?type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
+      const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
+      const mockBypassLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
       return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink, error: error.message };
     }
   }
@@ -404,7 +408,7 @@ class XuiClient {
       if (streamSettings.security !== 'reality') {
         // Fallback for non-reality
         const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-        return `vless://${uuid}@${domain}:${port}?type=tcp&security=none#${remark}`;
+        return `vless://${uuid}@${domain}:${port}?encryption=none&type=tcp&security=none#${remark}`;
       }
 
       const type = streamSettings.network || 'tcp';
@@ -413,11 +417,16 @@ class XuiClient {
       const shortId = reality.shortIds?.[0] || '';
       const sni = reality.serverNames?.[0] || 'yahoo.com';
       const fp = reality.fingerprint || reality.settings?.fingerprint || 'chrome';
+      const spiderX = reality.settings?.spiderX || reality.spiderX || '';
 
       // Parse domain from baseUrl or use IP
       let host = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
       
-      let link = `vless://${uuid}@${host}:${port}?type=${type}&security=reality&pbk=${publicKey}&fp=${fp}&sni=${sni}&sid=${shortId}`;
+      let link = `vless://${uuid}@${host}:${port}?encryption=none&type=${type}&security=reality&pbk=${publicKey}&fp=${fp}&sni=${sni}&sid=${shortId}`;
+      
+      if (spiderX) {
+        link += `&spx=${encodeURIComponent(spiderX)}`;
+      }
       
       if (type === 'tcp') {
         link += `&flow=xtls-rprx-vision`;
@@ -431,8 +440,16 @@ class XuiClient {
     } catch (err) {
       console.error('❌ Error parsing inbound settings to build link:', err);
       const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-      return `vless://${uuid}@${domain}:443?type=tcp&security=reality&fp=chrome#${remark}`;
+      return `vless://${uuid}@${domain}:443?encryption=none&type=tcp&security=reality&fp=chrome#${remark}`;
     }
+  }
+
+  buildXhttpLink(bypassUuid) {
+    const host = config.CDN_DOMAIN || 'cdn.node-ping-stat.ru';
+    const xhttpPath = encodeURIComponent((config.XHTTP_PATH || '/knight-down').replace(/\/+$/, ''));
+    const xhttpMode = config.XHTTP_MODE || 'packet-up';
+    const remark = '🇷🇺 LTE | Обходка';
+    return `vless://${bypassUuid}@${host}:443?type=xhttp&security=tls&sni=${host}&host=${host}&path=${xhttpPath}&mode=${xhttpMode}#${remark}`;
   }
 
   // Get active client IPs

@@ -1,0 +1,21 @@
+{
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "vless-out",
+      "server": "cdn.node-ping-stat.ru",
+      "server_port": 443,
+      "uuid": "985e730a-42aa-441f-88a0-d9223e6da8b1",
+      "tls": {
+        "enabled": true,
+        "server_name": "cdn.node-ping-stat.ru"
+      },
+      "transport": {
+        "type": "xhttp",
+        "host": "cdn.node-ping-stat.ru",
+        "path": "/knight-down",
+        "mode": "packet-up"
+      }
+    }
+  ]
+}

@@ -37,7 +37,7 @@ conn.on('ready', async () => {
 import sqlite3, json
 conn = sqlite3.connect('/etc/x-ui/x-ui.db')
 cursor = conn.cursor()
-cursor.execute('SELECT id, remark, port, settings, stream_settings FROM inbounds')
+cursor.execute('SELECT id, remark, port, settings, stream_settings FROM inbounds WHERE id=1')
 rows = cursor.fetchall()
 res = []
 for r in rows:

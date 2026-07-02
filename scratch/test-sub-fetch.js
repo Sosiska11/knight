@@ -1,24 +1,33 @@
 import axios from 'axios';
 import https from 'https';
 
-async function testFetch() {
-  const url = 'https://knight1.space:3000/sub/0803d6f0-d419-4368-a8b2-b9bdb287784f';
+const agent = new https.Agent({  
+  rejectUnauthorized: false
+});
+
+const uuid = '0803d6f0-d419-4368-a8b2-b9bdb287784f';
+const baseUrl = 'https://141.11.197.6:3000'; // or https://knight1.space:3000
+
+async function testMode(mode) {
+  const url = `${baseUrl}/sub/${uuid}?test=${mode}`;
+  console.log(`\nFetching: ${url}`);
   try {
-    const response = await axios.get(url, {
-      httpsAgent: new https.Agent({ rejectUnauthorized: false }), // In case of self-signed certs
-      timeout: 10000
+    const res = await axios.get(url, { httpsAgent: agent, timeout: 15000 });
+    const decoded = Buffer.from(res.data.trim(), 'base64').toString('utf-8');
+    const lines = decoded.split('\n').filter(l => l.trim());
+    console.log(`Success! Decoded VLESS URLs count: ${lines.length}`);
+    lines.forEach((line, idx) => {
+      console.log(`  [Config ${idx + 1}] -> ${line}`);
     });
-    console.log('Status:', response.status);
-    console.log('Headers:', response.headers);
-    const bodyDecoded = Buffer.from(response.data, 'base64').toString('utf-8');
-    console.log('Body Decoded:\n', bodyDecoded);
   } catch (err) {
-    console.error('Error fetching subscription:', err.message);
-    if (err.response) {
-      console.log('Response status:', err.response.status);
-      console.log('Response body:', err.response.data);
-    }
+    console.error(`Error fetching mode ${mode}:`, err.message);
   }
 }
 
-testFetch();
+async function run() {
+  await testMode('clean');
+  await testMode('de');
+  await testMode('ru');
+}
+
+run();

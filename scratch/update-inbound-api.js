@@ -13,10 +13,10 @@ async function run() {
   
   // Define the comprehensive list of allowed SNIs
   const allowedServerNames = [
+    "samsung.com",
     "google.com",
     "speedtest.net",
     "microsoft.com",
-    "samsung.com",
     "apple.com",
     "yandex.ru",
     "gosuslugi.ru",

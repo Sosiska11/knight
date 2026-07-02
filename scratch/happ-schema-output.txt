@@ -1,0 +1,10 @@
+Database Schema:
+
+Table: subscriptions
+SQL: CREATE TABLE subscriptions (
+            version INTEGER PRIMARY KEY,
+            data BLOB NOT NULL,
+            tag TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+--------------------------------------------------
