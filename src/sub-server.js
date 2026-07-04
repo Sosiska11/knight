@@ -735,34 +735,23 @@ app.get('/import/:uuid?', async (req, res) => {
                     desc: 'Легкий и быстрый современный клиент.',
                     badge: 'Рекомендуется',
                     icon: '🍏',
-                    step1_desc: 'Установите официальное приложение <b>Happ Proxy Utility</b> из App Store по кнопке ниже:',
-                    btn_download_text: '🍏 Скачать Happ из App Store',
+                    step1_desc: 'Установите официальное приложение <b>Happ Utility</b> из App Store по кнопке ниже:',
+                    btn_download_text: '🍏 Скачать Happ из App Store (Global)',
                     btn_download_url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215',
                     btn_download_text2: '🍏 Скачать Happ Plus (РФ регион)',
-                    btn_download_url2: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?l=en-GB',
+                    btn_download_url2: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973',
                     import_fn: 'importHapp'
                 },
                 {
-                    id: 'hiddify',
-                    name: 'Hiddify',
-                    desc: 'Популярное кроссплатформенное приложение с автонастройкой.',
+                    id: 'incy',
+                    name: 'iNCY',
+                    desc: 'Новый удобный клиент для iOS с автоимпортом.',
                     badge: '',
-                    icon: '🔗',
-                    step1_desc: 'Установите официальное приложение <b>Hiddify</b> из App Store по кнопке ниже:',
-                    btn_download_text: '🍏 Скачать Hiddify из App Store',
-                    btn_download_url: 'https://apps.apple.com/us/app/hiddify/id624250220',
-                    import_fn: 'importHiddify'
-                },
-                {
-                    id: 'shadowrocket',
-                    name: 'Shadowrocket',
-                    desc: 'Платное профессиональное приложение со множеством настроек.',
-                    badge: 'Платное (2.99$)',
-                    icon: '🚀',
-                    step1_desc: 'Купите и установите приложение <b>Shadowrocket</b> из App Store по ссылке ниже:',
-                    btn_download_text: '🚀 Купить Shadowrocket',
-                    btn_download_url: 'https://apps.apple.com/us/app/shadowrocket/id932747118',
-                    import_fn: 'importShadowrocket'
+                    icon: '⚡️',
+                    step1_desc: 'Установите официальное приложение <b>iNCY</b> из App Store по кнопке ниже:',
+                    btn_download_text: '🍏 Скачать iNCY из App Store',
+                    btn_download_url: 'https://apps.apple.com/ru/app/incy/id6756943388',
+                    import_fn: 'importIncy'
                 }
             ],
             android: [
@@ -772,36 +761,25 @@ app.get('/import/:uuid?', async (req, res) => {
                     desc: 'Простой клиент с экономным потреблением батареи.',
                     badge: 'Рекомендуется',
                     icon: '🤖',
-                    step1_desc: 'Скачайте и установите установочный APK-файл напрямую по ссылке ниже:',
-                    btn_download_text: '🤖 Скачать Happ (.apk)',
-                    btn_download_url: 'https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk',
+                    step1_desc: 'Установите приложение из Google Play или скачайте APK-файл напрямую:',
+                    btn_download_text: '🤖 Скачать из Google Play',
+                    btn_download_url: 'https://play.google.com/store/apps/details?id=com.happproxy',
+                    btn_download_text2: '📦 Скачать Happ APK (напрямую)',
+                    btn_download_url2: 'https://github.com/Happ-proxy/happ-android/releases/latest/download/Happ.apk',
                     import_fn: 'importHapp'
                 },
                 {
-                    id: 'hiddify',
-                    name: 'Hiddify',
-                    desc: 'Современный клиент с интуитивным дизайном и обходом блокировок.',
+                    id: 'incy',
+                    name: 'iNCY',
+                    desc: 'Современный клиент с простым интерфейсом.',
                     badge: '',
-                    icon: '🔗',
+                    icon: '🤖',
                     step1_desc: 'Установите приложение из Google Play или скачайте APK-файл напрямую:',
                     btn_download_text: '🤖 Скачать из Google Play',
-                    btn_download_url: 'https://play.google.com/store/apps/details?id=app.hiddify.com',
-                    btn_download_text2: '📦 Скачать Hiddify APK (напрямую)',
-                    btn_download_url2: 'https://github.com/hiddify/hiddify-next/releases/latest/download/hiddify-android-universal.apk',
-                    import_fn: 'importHiddify'
-                },
-                {
-                    id: 'singbox',
-                    name: 'Sing-box',
-                    desc: 'Официальный клиент на базе стабильного ядра Sing-box.',
-                    badge: '',
-                    icon: '📦',
-                    step1_desc: 'Установите приложение из Google Play или скачайте APK-файл напрямую:',
-                    btn_download_text: '🤖 Скачать из Google Play',
-                    btn_download_url: 'https://play.google.com/store/apps/details?id=io.nekohasekai.sfa',
-                    btn_download_text2: '📦 Скачать Sing-box APK (напрямую)',
-                    btn_download_url2: 'https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-universal.apk',
-                    import_fn: 'importSingBox'
+                    btn_download_url: 'https://play.google.com/store/apps/details?id=llc.itdev.incy',
+                    btn_download_text2: '📦 Скачать iNCY APK (напрямую)',
+                    btn_download_url2: 'https://github.com/INCY-DEV/incy-platforms/releases/latest/download/Incy.apk',
+                    import_fn: 'importIncy'
                 }
             ],
             windows: [
@@ -817,26 +795,15 @@ app.get('/import/:uuid?', async (req, res) => {
                     import_fn: 'importHapp'
                 },
                 {
-                    id: 'hiddify',
-                    name: 'Hiddify',
-                    desc: 'Интерфейсный клиент для ПК с удобной интеграцией.',
+                    id: 'incy',
+                    name: 'iNCY',
+                    desc: 'Удобный клиент для Windows с автонастройкой.',
                     badge: '',
-                    icon: '🔗',
+                    icon: '💻',
                     step1_desc: 'Скачайте программу установки (.exe) напрямую и запустите её:',
-                    btn_download_text: '📥 Скачать Hiddify для Windows (.exe)',
-                    btn_download_url: 'https://github.com/hiddify/hiddify-next/releases/latest/download/Hiddify-Windows-Setup-x64.exe',
-                    import_fn: 'importHiddify'
-                },
-                {
-                    id: 'singbox',
-                    name: 'Sing-box',
-                    desc: 'Стабильное консольное и GUI ядро для опытных пользователей.',
-                    badge: '',
-                    icon: '📦',
-                    step1_desc: 'Скачайте архив приложения (.zip) напрямую по кнопке ниже:',
-                    btn_download_text: '📥 Скачать Sing-box для Windows (ZIP)',
-                    btn_download_url: 'https://github.com/SagerNet/sing-box/releases/latest/download/sing-box-windows-amd64.zip',
-                    import_fn: 'importSingBox'
+                    btn_download_text: '📥 Скачать iNCY для Windows (.exe)',
+                    btn_download_url: 'https://github.com/INCY-DEV/incy-platforms/releases/latest/download/incy-windows-setup.exe',
+                    import_fn: 'importIncy'
                 }
             ],
             macos: [
@@ -847,35 +814,24 @@ app.get('/import/:uuid?', async (req, res) => {
                     badge: 'Рекомендуется',
                     icon: '🍎',
                     step1_desc: 'Установите официальное приложение из App Store для macOS:',
-                    btn_download_text: '🍏 Скачать Happ из App Store',
+                    btn_download_text: '🍏 Скачать Happ из App Store (Global)',
                     btn_download_url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215',
                     btn_download_text2: '🍏 Скачать Happ Plus (РФ регион)',
-                    btn_download_url2: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973?l=en-GB',
+                    btn_download_url2: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973',
                     import_fn: 'importHapp'
                 },
                 {
-                    id: 'hiddify',
-                    name: 'Hiddify',
+                    id: 'incy',
+                    name: 'iNCY',
                     desc: 'Кроссплатформенный клиент для macOS Intel & Apple Silicon.',
                     badge: '',
-                    icon: '🔗',
-                    step1_desc: 'Установите Hiddify из App Store или скачайте установочный файл .dmg:',
-                    btn_download_text: '🍏 Скачать из App Store',
-                    btn_download_url: 'https://apps.apple.com/us/app/hiddify/id624250220',
-                    btn_download_text2: '📦 Скачать Hiddify DMG для macOS',
-                    btn_download_url2: 'https://github.com/hiddify/hiddify-next/releases/latest/download/Hiddify-MacOS.dmg',
-                    import_fn: 'importHiddify'
-                },
-                {
-                    id: 'singbox',
-                    name: 'Sing-box',
-                    desc: 'Официальный macOS клиент для прямого импорта.',
-                    badge: '',
-                    icon: '📦',
-                    step1_desc: 'Установите приложение Sing-box из Mac App Store по кнопке ниже:',
-                    btn_download_text: '🍏 Скачать Sing-box из App Store',
-                    btn_download_url: 'https://apps.apple.com/us/app/sing-box-vt/id6451272673',
-                    import_fn: 'importSingBox'
+                    icon: '🍎',
+                    step1_desc: 'Скачайте установочный файл .dmg по кнопкам ниже в зависимости от процессора:',
+                    btn_download_text: '📦 Скачать iNCY для Apple Silicon (M1/M2/M3)',
+                    btn_download_url: 'https://github.com/INCY-DEV/incy-platforms/releases/latest/download/incy-macos-arm64.dmg',
+                    btn_download_text2: '📦 Скачать iNCY для Mac Intel',
+                    btn_download_url2: 'https://github.com/INCY-DEV/incy-platforms/releases/latest/download/incy-macos-intel.dmg',
+                    import_fn: 'importIncy'
                 }
             ]
         };
@@ -1016,19 +972,9 @@ app.get('/import/:uuid?', async (req, res) => {
             setTimeout(function() { openSchemeUrl("happ://import?url=" + encodeURIComponent(subUrl) + "&name=KnightVPN"); }, 900);
         }
 
-        function importSingBox() {
+        function importIncy() {
             if (!hasSub) return;
-            openSchemeUrl("sing-box://import-remote?url=" + encodeURIComponent(subUrl));
-        }
-
-        function importShadowrocket() {
-            if (!hasSub) return;
-            openSchemeUrl("shadowrocket://add/" + subUrl);
-        }
-
-        function importHiddify() {
-            if (!hasSub) return;
-            openSchemeUrl("hiddify://import/#" + subUrl);
+            openSchemeUrl("incy://import/" + subUrl);
         }
 
         function copySubUrl() {

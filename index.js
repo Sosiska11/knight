@@ -27,7 +27,11 @@ async function startApp() {
       await bot.telegram.setMyShortDescription(
         'Knight VPN — быстрый и безопасный VPN-сервис для всех ваших устройств.'
       );
-      console.log('📝 Bot description and short description updated successfully.');
+      
+      await bot.telegram.setMyCommands([
+        { command: 'start', description: 'Запустить / перезапустить бота 🔄' }
+      ]);
+      console.log('📝 Bot description, short description and commands updated successfully.');
     } catch (err) {
       console.warn('⚠️ Could not set bot descriptions (maybe invalid token or API error):', err.message);
     }

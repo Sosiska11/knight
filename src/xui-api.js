@@ -449,7 +449,15 @@ class XuiClient {
     const xhttpPath = encodeURIComponent((config.XHTTP_PATH || '/knight-down').replace(/\/+$/, ''));
     const xhttpMode = config.XHTTP_MODE || 'packet-up';
     const remark = '🇷🇺 LTE | Обходка';
-    return `vless://${bypassUuid}@${host}:443?type=xhttp&security=tls&sni=${host}&host=${host}&path=${xhttpPath}&mode=${xhttpMode}#${remark}`;
+    const extraObj = {
+      xPaddingBytes: "100-1000",
+      scMaxEachPostBytes: "100000-1000000",
+      scMinPostsIntervalMs: "10-30",
+      scMaxBufferedPosts: 30,
+      noGRPCHeader: false
+    };
+    const extra = encodeURIComponent(JSON.stringify(extraObj));
+    return `vless://${bypassUuid}@${host}:443?encryption=none&type=xhttp&security=tls&sni=${host}&host=${host}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}#${remark}`;
   }
 
   // Get active client IPs

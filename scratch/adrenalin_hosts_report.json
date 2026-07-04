@@ -1,0 +1,102 @@
+[
+  {
+    "remark": "🇵🇱 Польша",
+    "host": "pl1.reus.lol",
+    "ip": "31.77.56.216",
+    "isp": "Qwins LTD",
+    "org": "Qwins LTD",
+    "as": "AS213702 QWINS LTD",
+    "country": "Poland",
+    "city": "Warsaw"
+  },
+  {
+    "remark": "🇵🇱 Польша",
+    "host": "cluster-ec.reus.lol",
+    "ip": "188.72.103.3",
+    "isp": "Yandex.Cloud LLC",
+    "org": "Yandex.Cloud LLC",
+    "as": "AS215013 Yandex.Cloud LLC",
+    "country": "United Arab Emirates",
+    "city": "Dubai"
+  },
+  {
+    "remark": "🇳🇱 Нидерланды",
+    "host": "nl1.reus.lol",
+    "ip": "94.156.117.234",
+    "isp": "Spacecore Solution LTD",
+    "org": "Spacecore Solution LTD",
+    "as": "AS198037 SPACECORE SOLUTION LTD",
+    "country": "The Netherlands",
+    "city": "Meppel"
+  },
+  {
+    "remark": "🇩🇪 Германия",
+    "host": "static-de-1.reus.lol",
+    "ip": "188.72.103.3",
+    "isp": "Yandex.Cloud LLC",
+    "org": "Yandex.Cloud LLC",
+    "as": "AS215013 Yandex.Cloud LLC",
+    "country": "United Arab Emirates",
+    "city": "Dubai"
+  },
+  {
+    "remark": "🇩🇪 Германия",
+    "host": "static-de-2.reus.lol",
+    "ip": "188.72.103.3",
+    "isp": "Yandex.Cloud LLC",
+    "org": "Yandex.Cloud LLC",
+    "as": "AS215013 Yandex.Cloud LLC",
+    "country": "United Arab Emirates",
+    "city": "Dubai"
+  },
+  {
+    "remark": "🇧🇬 Болгария",
+    "host": "bg1.reus.lol",
+    "ip": "45.137.201.135",
+    "isp": "Julian Achter",
+    "org": "Julian Achter",
+    "as": "AS211507 Julian Achter",
+    "country": "Italy",
+    "city": "Milan"
+  },
+  {
+    "remark": "🇨🇭 Швейцария",
+    "host": "ch1.reus.lol",
+    "ip": "132.243.175.81",
+    "isp": "Alexhost SRL",
+    "org": "AlexHost",
+    "as": "AS200019 ALEXHOST SRL",
+    "country": "Switzerland",
+    "city": "Rümlang"
+  },
+  {
+    "remark": "🇫🇮 Финляндия",
+    "host": "fi1.reus.lol",
+    "ip": "31.77.138.28",
+    "isp": "Ace Data Centers II",
+    "org": "Ace Data Centers II, LLC",
+    "as": "",
+    "country": "United States",
+    "city": "Orem"
+  },
+  {
+    "remark": "🇷🇺 Россия | Обход / LTE | YT",
+    "host": "cluster-ml.reus.lol",
+    "ip": "188.72.103.3",
+    "isp": "Yandex.Cloud LLC",
+    "org": "Yandex.Cloud LLC",
+    "as": "AS215013 Yandex.Cloud LLC",
+    "country": "United Arab Emirates",
+    "city": "Dubai"
+  },
+  {
+    "remark": "🇷🇺 Россия | Обход / LTE | YT [#2]",
+    "host": "static-ru-2.reus.lol",
+    "ip": "188.72.103.3",
+    "isp": "Yandex.Cloud LLC",
+    "org": "Yandex.Cloud LLC",
+    "as": "AS215013 Yandex.Cloud LLC",
+    "country": "United Arab Emirates",
+    "city": "Dubai"
+  }
+]

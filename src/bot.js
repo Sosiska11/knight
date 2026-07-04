@@ -406,7 +406,7 @@ bot.action('get_key', async (ctx) => {
   const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
   const keyboard = {
     inline_keyboard: [
-      [{ text: '⚡️ Установить в Happ', url: autoImportRedirectUrl }],
+      [{ text: '🚀 Начать установку', web_app: { url: autoImportRedirectUrl } }],
       [{ text: '🔙 Назад в профиль', callback_data: 'show_profile' }]
     ]
   };
@@ -461,7 +461,8 @@ bot.action('activate_trial', async (ctx) => {
     const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
     const keyboard = {
       inline_keyboard: [
-        [{ text: '⚡️ Установить в Happ', url: autoImportRedirectUrl }],
+        [{ text: '🚀 Начать установку', web_app: { url: autoImportRedirectUrl } }],
+        [{ text: '⚙️ Инструкция', callback_data: 'show_instructions' }],
         [{ text: '🔙 В профиль', callback_data: 'show_profile' }]
       ]
     };
@@ -590,7 +591,8 @@ bot.on('successful_payment', async (ctx) => {
 
       const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${client.uuid}`;
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)]
+        [Markup.button.webApp('🚀 Начать установку', autoImportRedirectUrl)],
+        [Markup.button.callback('⚙️ Инструкция', 'show_instructions')]
       ]);
       await ctx.reply(keyText, { parse_mode: 'HTML', ...keyboard });
     }
@@ -672,7 +674,8 @@ bot.command('give', async (ctx) => {
 
       const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${updatedSub.client_uuid}`;
       const keyboard = Markup.inlineKeyboard([
-        [Markup.button.url('⚡️ Установить ключ в Happ', autoImportRedirectUrl)]
+        [Markup.button.webApp('🚀 Начать установку', autoImportRedirectUrl)],
+        [Markup.button.callback('⚙️ Инструкция', 'show_instructions')]
       ]);
       await bot.telegram.sendMessage(targetId, userKeyText, { parse_mode: 'HTML', ...keyboard });
     } catch (err) {
