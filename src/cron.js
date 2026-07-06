@@ -6,7 +6,7 @@ import * as db from './database.js';
 import xuiApi from './xui-api.js';
 import bot from './bot.js';
 import config from './config.js';
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, exec } from 'child_process';
 import fs from 'fs';
 import dns from 'dns';
 import { promisify } from 'util';
@@ -64,6 +64,11 @@ function sanitizeVlessUrl(vlessUrl) {
     // Ensure encryption=none is always present (required by Hiddify/HAPP sing-box core)
     if (!cleanParams.has('encryption')) {
       cleanParams.set('encryption', 'none');
+    }
+
+    // For Reality, ensure fingerprint (fp) is present and defaults to chrome
+    if (cleanParams.get('security') === 'reality' && !cleanParams.has('fp')) {
+      cleanParams.set('fp', 'chrome');
     }
 
     const portPart = port ? `:${port}` : '';
@@ -247,6 +252,19 @@ function vlessUrlToOutbound(vlessUrl) {
 }
 
 // Verify VLESS proxy by starting a local xray client on the VPS and making a request through it
+const execPromise = promisify(exec);
+
+// Helper to execute commands asynchronously with a timeout
+async function execAsync(cmd, timeout = 4000) {
+  try {
+    const { stdout, stderr } = await execPromise(cmd, { timeout });
+    return { code: 0, stdout, stderr };
+  } catch (err) {
+    return { code: err.code || 1, stdout: '', stderr: err.message };
+  }
+}
+
+// Verify VLESS proxy by starting a local xray client on the VPS and making a request through it
 function verifyVlessProxy(vlessUrl, timeout = 3000) {
   return new Promise((resolve) => {
     // If not running on Linux or xray binary doesn't exist, fallback to true since we already did pingTls
@@ -280,11 +298,17 @@ function verifyVlessProxy(vlessUrl, timeout = 3000) {
       proc.on('error', () => {});
 
       // Wait 1 second for xray to start up
-      setTimeout(() => {
+      setTimeout(async () => {
         let success = false;
         try {
-          execSync(`curl -s -x socks5h://127.0.0.1:${testPort} -I https://www.google.com --max-time 3`);
-          success = true;
+          const res1 = await execAsync(`curl -s -x socks5h://127.0.0.1:${testPort} -I https://www.google.com --max-time 3`);
+          if (res1.code === 0) {
+            success = true;
+          } else {
+            // Fallback for RU nodes that may block google.com but allow Russian traffic
+            const res2 = await execAsync(`curl -s -x socks5h://127.0.0.1:${testPort} -I https://ya.ru --max-time 3`);
+            success = res2.code === 0;
+          }
         } catch (e) {
           success = false;
         }
@@ -303,24 +327,114 @@ function verifyVlessProxy(vlessUrl, timeout = 3000) {
   });
 }
 
-// Helper to check ISP name using ip-api.com
+// Cache for GeoIP queries to avoid redundant requests and rate-limiting
+const geoCache = new Map();
+
+// Helper to check ISP name and country using fallback APIs
 async function getGeoInfo(host) {
   try {
     let ip = host;
     if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
-      const ips = await resolve4(host);
-      if (ips && ips.length > 0) {
-        ip = ips[0];
-      } else {
+      try {
+        const ips = await resolve4(host);
+        if (ips && ips.length > 0) {
+          ip = ips[0];
+        } else {
+          return null;
+        }
+      } catch (dnsErr) {
         return null;
       }
     }
-    const res = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 3000 });
-    return {
-      ip,
-      org: res.data.org || res.data.isp || 'UNKNOWN',
-      country: res.data.countryCode || 'UNKNOWN'
-    };
+    
+    // Check local cache first
+    if (geoCache.has(ip)) {
+      return geoCache.get(ip);
+    }
+
+    // Check database cache next
+    try {
+      const dbCached = await db.getGeoCache(ip);
+      if (dbCached) {
+        const result = {
+          ip,
+          org: dbCached.org || 'UNKNOWN',
+          country: dbCached.country || 'UNKNOWN'
+        };
+        geoCache.set(ip, result);
+        return result;
+      }
+    } catch (dbErr) {
+      console.warn('⚠️ SQLite GeoIP cache lookup failed:', dbErr.message);
+    }
+    
+    let result = null;
+    
+    // Attempt 1: ip-api.com
+    try {
+      const res = await axios.get(`http://ip-api.com/json/${ip}`, { timeout: 2500 });
+      if (res.data && res.data.status === 'success') {
+        result = {
+          ip,
+          org: res.data.org || res.data.isp || 'UNKNOWN',
+          country: res.data.countryCode || 'UNKNOWN'
+        };
+      }
+    } catch (e) {
+      // ignore and try fallback
+    }
+
+    // Attempt 2: freeipapi.com
+    if (!result) {
+      try {
+        const res = await axios.get(`https://freeipapi.com/api/json/${ip}`, { timeout: 2500 });
+        if (res.data && res.data.countryCode) {
+          result = {
+            ip,
+            org: res.data.org || res.data.isp || 'UNKNOWN',
+            country: res.data.countryCode
+          };
+        }
+      } catch (e) {
+        // ignore and try fallback
+      }
+    }
+
+    // Attempt 3: ipinfo.io
+    if (!result) {
+      try {
+        const res = await axios.get(`https://ipinfo.io/${ip}/json`, { timeout: 2500 });
+        if (res.data && res.data.country) {
+          result = {
+            ip,
+            org: res.data.org || 'UNKNOWN',
+            country: res.data.country
+          };
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (!result) {
+      result = {
+        ip,
+        org: 'UNKNOWN',
+        country: 'UNKNOWN'
+      };
+    }
+
+    // Cache the resolved result
+    geoCache.set(ip, result);
+
+    // Save to database cache
+    try {
+      await db.setGeoCache(ip, result.country, result.org);
+    } catch (dbErr) {
+      console.warn('⚠️ Failed to save GeoIP to SQLite cache:', dbErr.message);
+    }
+
+    return result;
   } catch (err) {
     return null;
   }
@@ -333,7 +447,8 @@ function isBlockedIsp(ispName) {
   const blockedKeywords = [
     'digitalocean', 'digital ocean', 'hetzner', 'ovh', 'linode', 'akamai',
     'scaleway', 'cloudflare', 'leaseweb', 'm247', 'colocrossing', 'nexus',
-    'senko'
+    'senko', 'doprax', 'vultr', 'contabo', 'aeza', 'stark', 'pq.hosting',
+    'hostkey', 'justhost', 'fly.io', 'heroku', 'datacamp'
   ];
   return blockedKeywords.some(kw => lower.includes(kw));
 }
@@ -348,7 +463,7 @@ function shuffleArray(array) {
 }
 
 // Robust validation of VLESS URL parameters
-function isValidConfig(url) {
+function isValidConfig(url, isBypassList = false) {
   try {
     const queryPart = url.split('?')[1]?.split('#')[0];
     if (!queryPart) return false;
@@ -366,17 +481,25 @@ function isValidConfig(url) {
       if (!pbk || !sni || !sid) return false;
       if (fp === '') return false; // empty fingerprint
       
-      // Block known bad/blocked/unstable SNIs in Russia (e.g. Google, Cloudflare, Yahoo, fuck.rkn, etc.)
+      // Block known bad/blocked/unstable SNIs in Russia
       const lowerSni = sni.toLowerCase();
       
-      const blockedKeywords = [
-        'google.com', 'youtube.com', 'cloudflare.com', 'yahoo.com', 
-        'facebook.com', 'instagram.com', 'netflix.com', 'fuck', 'rkn',
-        'arvancloud', 'yandex', 'vk.com', 'vk.ru', 'gosuslugi', 'sberbank', 'mail.ru',
-        'ok.ru', 'sber.ru', 'tinkoff.ru', 'rambler.ru', 'avito.ru'
-      ];
-      if (blockedKeywords.some(keyword => lowerSni.includes(keyword))) {
-        return false;
+      if (isBypassList) {
+        // For whitelist bypass, only block offensive keywords (fuck, rkn)
+        const trashKeywords = ['fuck', 'rkn'];
+        if (trashKeywords.some(keyword => lowerSni.includes(keyword))) {
+          return false;
+        }
+      } else {
+        const blockedKeywords = [
+          'google.com', 'youtube.com', 'cloudflare.com', 'yahoo.com', 
+          'facebook.com', 'instagram.com', 'netflix.com', 'fuck', 'rkn',
+          'arvancloud', 'yandex', 'vk.com', 'vk.ru', 'gosuslugi', 'sberbank', 'mail.ru',
+          'ok.ru', 'sber.ru', 'tinkoff.ru', 'rambler.ru', 'avito.ru'
+        ];
+        if (blockedKeywords.some(keyword => lowerSni.includes(keyword))) {
+          return false;
+        }
       }
     } else if (security === 'tls') {
       const sni = params.get('sni');
@@ -399,7 +522,7 @@ function isValidConfig(url) {
 }
 
 // Helper to verify a single reserve candidate node
-async function verifySingleNode(line) {
+async function verifySingleNode(line, forceRuCountry = false) {
   try {
     const cleanLine = sanitizeVlessUrl(line);
     const match = cleanLine.match(/@([^:/]+):(\d+)/);
@@ -410,22 +533,30 @@ async function verifySingleNode(line) {
     const sniMatch = cleanLine.match(/[?&]sni=([^&#]+)/);
     const sni = sniMatch ? decodeURIComponent(sniMatch[1]) : '';
     
-    // Fast check: TLS port open?
+    // 1. Fast check: TLS port open?
     const isOnline = await pingTls(host, port, sni, 1500);
     if (!isOnline) return null;
 
-    // Deep check: VLESS proxy working?
+    // 2. Fast check: ISP and country check (Done before starting xray!)
+    const geo = await getGeoInfo(host);
+    const org = geo ? geo.org : 'UNKNOWN';
+    const country = geo ? geo.country : 'UNKNOWN';
+
+    if (forceRuCountry && country !== 'RU') {
+      console.log(`⏩ Skipped non-RU IP for bypass list: ${host}:${port} | Country: ${country}`);
+      return null;
+    }
+
+    if (isBlockedIsp(org)) {
+      console.log(`⏩ Skipped node on blocked/unknown ISP: ${host}:${port} | ISP: ${org}`);
+      return null;
+    }
+
+    // 3. Deep check: VLESS proxy working? (Only runs for matching country/ISP!)
     const works = await verifyVlessProxy(cleanLine);
     if (!works) return null;
 
-    // ISP check: not a blocked provider?
-    const geo = await getGeoInfo(host);
-    if (geo && !isBlockedIsp(geo.org)) {
-      return { host, port, org: geo.org, sni, cleanLine };
-    } else {
-      console.log(`⏩ Skipped node on blocked/unknown ISP: ${host}:${port} | ISP: ${geo ? geo.org : 'UNKNOWN'}`);
-      return null;
-    }
+    return { host, port, org, sni, cleanLine };
   } catch (err) {
     return null;
   }
@@ -436,11 +567,12 @@ export async function fetchReserveNodes() {
   console.log('⏰ Fetching reserve public nodes from goida-vpn-configs...');
   try {
     const urls = [
-      'https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/1.txt',
-      'https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/3.txt',
-      'https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/6.txt',
-      'https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/9.txt',
-      'https://github.com/AvenCores/goida-vpn-configs/raw/refs/heads/main/githubmirror/14.txt'
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/1.txt',
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/3.txt',
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/6.txt',
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/9.txt',
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/14.txt',
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/26.txt'
     ];
 
     const SUPPORTED_COUNTRIES = [
@@ -464,10 +596,16 @@ export async function fetchReserveNodes() {
         const text = response.data;
         if (!text || typeof text !== 'string') continue;
 
-        const lines = text.split('\n');
+        let lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        const isBypassList = url.includes('26.txt');
+
+        // Optimize: bypass list is huge, limit it to 400 candidates to prevent long check runs
+        if (isBypassList) {
+          shuffleArray(lines);
+          lines = lines.slice(0, 400);
+        }
 
         for (let line of lines) {
-          line = line.trim();
           if (!line.startsWith('vless://')) continue;
 
           // Filter out insecure configs
@@ -478,14 +616,15 @@ export async function fetchReserveNodes() {
           const cleanLine = sanitizeVlessUrl(line);
 
           // Ensure the config is valid and secure
-          if (!isValidConfig(cleanLine)) {
+          if (!isValidConfig(cleanLine, isBypassList)) {
             continue;
           }
 
-          // EXCLUSIVELY use type=grpc
+          // EXCLUSIVELY use type=grpc (allow tcp/ws for bypass list)
           try {
             const urlObj = new URL(cleanLine);
-            if (urlObj.searchParams.get('type') !== 'grpc') {
+            const type = urlObj.searchParams.get('type');
+            if (type !== 'grpc' && !(isBypassList && (type === 'tcp' || type === 'ws' || !type))) {
               continue;
             }
           } catch (e) {
@@ -515,6 +654,11 @@ export async function fetchReserveNodes() {
               matchedCountry = country.code;
               break;
             }
+          }
+
+          // If it is from the bypass list, force matchedCountry to 'RU' (Russian whitelist bypass configs)
+          if (isBypassList) {
+            matchedCountry = 'RU';
           }
 
           if (matchedCountry) {
@@ -563,17 +707,18 @@ export async function fetchReserveNodes() {
 
     // Helper to process a queue in chunks of concurrent promises
     async function processQueueInChunks(queue, limit, targetArray, countryCode) {
+      const maxNodes = countryCode === 'RU' ? 6 : 3;
       let index = 0;
-      while (targetArray.length < 3 && index < queue.length) {
+      while (targetArray.length < maxNodes && index < queue.length) {
         const chunk = queue.slice(index, index + limit);
         index += limit;
 
-        const promises = chunk.map(line => verifySingleNode(line));
+        const promises = chunk.map(line => verifySingleNode(line, countryCode === 'RU'));
         const results = await Promise.all(promises);
 
         for (const res of results) {
           if (res) {
-            if (targetArray.length >= 3) break;
+            if (targetArray.length >= maxNodes) break;
             console.log(`🟢 Added ${countryCode} reserve node: ${res.host}:${res.port} | ISP: ${res.org} | SNI: ${res.sni}`);
             targetArray.push({ country: countryCode, url: res.cleanLine });
           }

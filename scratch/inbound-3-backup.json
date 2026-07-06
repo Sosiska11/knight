@@ -1,0 +1,198 @@
+{
+  "id": 3,
+  "up": 2254,
+  "down": 9953,
+  "total": 0,
+  "remark": "🇳🇱 Netherlands #2",
+  "subSortIndex": 1,
+  "enable": true,
+  "expiryTime": 0,
+  "trafficReset": "never",
+  "lastTrafficResetTime": 0,
+  "clientStats": [
+    {
+      "id": 24,
+      "inboundId": 3,
+      "enable": true,
+      "email": "test",
+      "uuid": "070fb4d1-98dc-4dc3-9f0c-ef52be498d7e",
+      "subId": "1zlypk6e9xcai0lg",
+      "up": 392,
+      "down": 3150,
+      "expiryTime": 0,
+      "total": 0,
+      "reset": 0,
+      "lastOnline": 1781042997013
+    },
+    {
+      "id": 120,
+      "inboundId": 3,
+      "enable": true,
+      "email": "vpn_user_6194420166_hy2",
+      "uuid": "974284a5-3696-4d8b-9239-e8b3ed66e878",
+      "subId": "e3930853-5e83-48f9-9b07-a821b1133d29",
+      "up": 0,
+      "down": 0,
+      "expiryTime": 0,
+      "total": 0,
+      "reset": 0,
+      "lastOnline": 0
+    },
+    {
+      "id": 121,
+      "inboundId": 3,
+      "enable": true,
+      "email": "vpn_user_1408185683_hy2",
+      "uuid": "db439263-1c87-4b6a-ae84-2e9c6c0b75df",
+      "subId": "dedc3297-d07b-4a37-b58a-58c0f12d6b1a",
+      "up": 0,
+      "down": 0,
+      "expiryTime": 0,
+      "total": 0,
+      "reset": 0,
+      "lastOnline": 0
+    },
+    {
+      "id": 125,
+      "inboundId": 3,
+      "enable": true,
+      "email": "vpn_user_797540993_hy2",
+      "uuid": "0803d6f0-d419-4368-a8b2-b9bdb287784f",
+      "subId": "dab08b5e-eab5-44d2-887b-75c7ba9296f2",
+      "up": 0,
+      "down": 0,
+      "expiryTime": 0,
+      "total": 0,
+      "reset": 0,
+      "lastOnline": 0
+    }
+  ],
+  "listen": "",
+  "port": 46352,
+  "protocol": "hysteria",
+  "tag": "in-46352-udp",
+  "shareAddrStrategy": "node",
+  "shareAddr": "",
+  "settings": {
+    "clients": [
+      {
+        "auth": "x2ko8m1oi8sky57r",
+        "comment": "",
+        "created_at": 1781042856043,
+        "email": "test",
+        "enable": true,
+        "expiryTime": 0,
+        "id": "070fb4d1-98dc-4dc3-9f0c-ef52be498d7e",
+        "limitIp": 0,
+        "password": "nxh06aomjlcz1348",
+        "reset": 0,
+        "security": "auto",
+        "subId": "1zlypk6e9xcai0lg",
+        "tgId": 0,
+        "totalGB": 0,
+        "updated_at": 1783011642000
+      },
+      {
+        "auth": "974284a5-3696-4d8b-9239-e8b3ed66e878",
+        "comment": "Migrated Hysteria 2 profile",
+        "created_at": 1783195464598,
+        "email": "vpn_user_6194420166_hy2",
+        "enable": true,
+        "expiryTime": 0,
+        "id": "974284a5-3696-4d8b-9239-e8b3ed66e878",
+        "limitIp": 1,
+        "password": "974284a5-3696-4d8b-9239-e8b3ed66e878",
+        "reset": 0,
+        "security": "",
+        "subId": "e3930853-5e83-48f9-9b07-a821b1133d29",
+        "tgId": 0,
+        "totalGB": 0,
+        "updated_at": 1783195464000
+      },
+      {
+        "auth": "db439263-1c87-4b6a-ae84-2e9c6c0b75df",
+        "comment": "Migrated Hysteria 2 profile",
+        "created_at": 1783195464644,
+        "email": "vpn_user_1408185683_hy2",
+        "enable": true,
+        "expiryTime": 0,
+        "id": "db439263-1c87-4b6a-ae84-2e9c6c0b75df",
+        "limitIp": 1,
+        "password": "db439263-1c87-4b6a-ae84-2e9c6c0b75df",
+        "reset": 0,
+        "security": "",
+        "subId": "dedc3297-d07b-4a37-b58a-58c0f12d6b1a",
+        "tgId": 0,
+        "totalGB": 0,
+        "updated_at": 1783195464000
+      },
+      {
+        "auth": "0803d6f0-d419-4368-a8b2-b9bdb287784f",
+        "comment": "Hysteria 2 NL profile",
+        "created_at": 1783262758603,
+        "email": "vpn_user_797540993_hy2",
+        "enable": true,
+        "expiryTime": 0,
+        "id": "0803d6f0-d419-4368-a8b2-b9bdb287784f",
+        "limitIp": 5,
+        "password": "0803d6f0-d419-4368-a8b2-b9bdb287784f",
+        "reset": 0,
+        "security": "",
+        "subId": "dab08b5e-eab5-44d2-887b-75c7ba9296f2",
+        "tgId": 0,
+        "totalGB": 0,
+        "updated_at": 1783262758000
+      }
+    ],
+    "version": 2
+  },
+  "streamSettings": {
+    "network": "hysteria",
+    "hysteriaSettings": {
+      "version": 2,
+      "udpIdleTimeout": 60
+    },
+    "security": "tls",
+    "tlsSettings": {
+      "serverName": "",
+      "minVersion": "1.2",
+      "maxVersion": "1.3",
+      "cipherSuites": "",
+      "rejectUnknownSni": false,
+      "disableSystemRoot": false,
+      "enableSessionResumption": false,
+      "certificates": [
+        {
+          "certificateFile": "/root/ssl/cert.crt",
+          "keyFile": "/root/ssl/private.key",
+          "ocspStapling": 3600,
+          "oneTimeLoading": false,
+          "usage": "encipherment",
+          "buildChain": false
+        }
+      ],
+      "alpn": [
+        "h3"
+      ],
+      "echServerKeys": "ACD+Oebv/EMDLAXYJCjY9d+f2eirodRXKrjfhfSCcdQbpQBT/g0ATwAAIAAgwQyE+Z0PLzV2/OjRTNn4v+16kIhb6C/Qj1RixzGRD2YAJAABAAEAAQACAAEAAwACAAEAAgACAAIAAwADAAEAAwACAAMAAwAAAAA=",
+      "settings": {
+        "fingerprint": "chrome",
+        "echConfigList": "AFP+DQBPAAAgACDBDIT5nQ8vNXb86NFM2fi/7XqQiFvoL9CPVGLHMZEPZgAkAAEAAQABAAIAAQADAAIAAQACAAIAAgADAAMAAQADAAIAAwADAAAAAA==",
+        "pinnedPeerCertSha256": []
+      }
+    },
+    "finalmask": {
+      "udp": [
+        {
+          "type": "salamander",
+          "settings": {
+            "password": "rhvw03at2ir0p7ru"
+          }
+        }
+      ]
+    }
+  },
+  "sniffing": {
+    "enabled": false
+  }
+}

@@ -23,6 +23,8 @@ const xuiPassword = process.env.XUI_PASSWORD;
 const xuiInboundId = parseInt(process.env.XUI_INBOUND_ID || '1', 10);
 const xuiBypassInboundId = process.env.XUI_BYPASS_INBOUND_ID ? parseInt(process.env.XUI_BYPASS_INBOUND_ID, 10) : null;
 const xuiCdnInboundId = process.env.XUI_CDN_INBOUND_ID ? parseInt(process.env.XUI_CDN_INBOUND_ID, 10) : null;
+const xuiHy2InboundId = process.env.XUI_HY2_INBOUND_ID ? parseInt(process.env.XUI_HY2_INBOUND_ID, 10) : null;
+const hy2Port = process.env.HY2_PORT ? parseInt(process.env.HY2_PORT, 10) : 46352;
 const useCdnBypass = process.env.USE_CDN_BYPASS === 'true';
 const cdnDomain = process.env.CDN_DOMAIN || '';
 const rawCdnPath = process.env.CDN_PATH || '/knight-down';
@@ -96,6 +98,8 @@ export default {
   XUI_INBOUND_ID: xuiInboundId,
   XUI_BYPASS_INBOUND_ID: xuiBypassInboundId,
   XUI_CDN_INBOUND_ID: xuiCdnInboundId,
+  XUI_HY2_INBOUND_ID: xuiHy2InboundId,
+  HY2_PORT: hy2Port,
   USE_CDN_BYPASS: useCdnBypass,
   CDN_DOMAIN: cdnDomain,
   CDN_PATH: cdnPath,

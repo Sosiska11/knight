@@ -61,6 +61,15 @@ export async function initDb() {
   `);
 
   await dbRun(`
+    CREATE TABLE IF NOT EXISTS geoip_cache (
+      ip TEXT PRIMARY KEY,
+      country TEXT,
+      org TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await dbRun(`
     CREATE TABLE IF NOT EXISTS subscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tg_id INTEGER,
@@ -330,3 +339,20 @@ export async function forceExtendUser(tgId, days) {
     return await createSubscription(tgId, email, uuid, connectionUrl, 'Admin Bonus', days);
   }
 }
+
+// GeoIP Cache helpers
+export async function getGeoCache(ip) {
+  return await dbGet('SELECT * FROM geoip_cache WHERE ip = ?', [ip]);
+}
+
+export async function setGeoCache(ip, country, org) {
+  try {
+    await dbRun(
+      'INSERT OR REPLACE INTO geoip_cache (ip, country, org) VALUES (?, ?, ?)',
+      [ip, country, org]
+    );
+  } catch (error) {
+    console.error('Error in setGeoCache:', error);
+  }
+}
+

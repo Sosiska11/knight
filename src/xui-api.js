@@ -17,6 +17,7 @@ class XuiClient {
     this.csrfToken = null;
     this.sessionExpiry = null;
     this.offlineNodes = new Set();
+    this.hy2ObfsCache = null;
   }
 
   // Helper to check if session is still valid
@@ -285,6 +286,37 @@ class XuiClient {
         }
       }
 
+      // 4. Add to Hysteria 2 Inbound
+      if (config.XUI_HY2_INBOUND_ID) {
+        const hy2Payload = {
+          inboundIds: [config.XUI_HY2_INBOUND_ID],
+          client: {
+            id: uuid,
+            auth: uuid,
+            password: uuid,
+            email: email + '_hy2',
+            limitIp: limitIp,
+            totalGB: 0,
+            expiryTime: 0,
+            enable: true,
+            tgId: 0,
+            subId: '',
+            comment: 'Hysteria 2 NL profile'
+          }
+        };
+
+        try {
+          const hy2Response = await axios.post(url, hy2Payload, { headers, timeout: 10000 });
+          if (hy2Response.data && hy2Response.data.success) {
+            console.log(`✅ Client ${email} added in 3x-ui to Hysteria 2 inbound.`);
+          } else {
+            console.warn(`⚠️ Failed to add client to Hysteria 2 inbound: ${hy2Response.data?.msg || 'Unknown panel error'}`);
+          }
+        } catch (err) {
+          console.error(`⚠️ Failed to add client to Hysteria 2 inbound due to request error:`, err.message);
+        }
+      }
+
       // Attempt to build the Reality links automatically
       const connectionUrl = await this.buildRealityLink(inboundId, uuid, email);
       let bypassConnectionUrl = null;
@@ -318,11 +350,13 @@ class XuiClient {
       let url = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email)}`;
       let bypassUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_bp')}`;
       let cdnUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_cdn')}`;
-      console.log(`🗑️ Attempting to delete client ${email}, bypass and CDN client...`);
+      let hy2Url = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_hy2')}`;
+      console.log(`🗑️ Attempting to delete client ${email}, bypass, CDN and Hysteria 2 client...`);
       
       let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
       await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
       await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
+      await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
 
       // If first delete method returned 200 but failed, check if client was simply not found
       if (response.status === 200 && response.data && !response.data.success) {
@@ -355,6 +389,14 @@ class XuiClient {
           const cdnUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_CDN_INBOUND_ID}/delClient/${bypassUuid}`;
           await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
             console.warn(`⚠️ Failed to delete client from CDN inbound:`, err.message);
+          });
+        }
+
+        // If Hysteria 2 inbound is configured, clean it up as well
+        if (config.XUI_HY2_INBOUND_ID) {
+          const hy2Url = `${this.baseUrl}/panel/api/inbounds/${config.XUI_HY2_INBOUND_ID}/delClient/${uuid}`;
+          await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+            console.warn(`⚠️ Failed to delete client from Hysteria 2 inbound:`, err.message);
           });
         }
       }
@@ -442,6 +484,49 @@ class XuiClient {
       const domain = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
       return `vless://${uuid}@${domain}:443?encryption=none&type=tcp&security=reality&fp=chrome#${remark}`;
     }
+  }
+
+  async buildHysteria2Link(uuid, customHost = null, customRemark = null) {
+    const defaultHost = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
+    const host = customHost || defaultHost;
+    const port = config.HY2_PORT || 46352;
+    const sni = defaultHost;
+    const remark = customRemark || '🇳🇱 Нидерланды | Hysteria 2';
+
+    if (this.hy2ObfsCache === null) {
+      if (config.XUI_HY2_INBOUND_ID) {
+        try {
+          const inbound = await this.getInbound(config.XUI_HY2_INBOUND_ID);
+          if (inbound) {
+            const streamSettings = typeof inbound.streamSettings === 'string'
+              ? JSON.parse(inbound.streamSettings)
+              : inbound.streamSettings;
+            const finalmask = streamSettings?.finalmask;
+            if (finalmask && finalmask.udp && finalmask.udp.length > 0) {
+              const udpMask = finalmask.udp[0];
+              if (udpMask.type && udpMask.settings && udpMask.settings.password) {
+                this.hy2ObfsCache = `&obfs=${udpMask.type}&obfs-password=${udpMask.settings.password}`;
+                console.log(`ℹ️ Cached Hysteria 2 obfuscation parameters: ${this.hy2ObfsCache}`);
+              } else {
+                this.hy2ObfsCache = '';
+              }
+            } else {
+              this.hy2ObfsCache = '';
+            }
+          } else {
+            this.hy2ObfsCache = '';
+          }
+        } catch (err) {
+          console.error('❌ Failed to fetch Hysteria 2 inbound settings for caching:', err.message);
+          // Do not cache failure permanently so we can retry later
+        }
+      } else {
+        this.hy2ObfsCache = '';
+      }
+    }
+
+    const obfsParams = this.hy2ObfsCache || '';
+    return `hysteria2://${uuid}@${host}:${port}?sni=${sni}&alpn=h3${obfsParams}#${remark}`;
   }
 
   buildXhttpLink(bypassUuid) {

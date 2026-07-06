@@ -32,8 +32,8 @@ function executeCommand(conn, cmd) {
 conn.on('ready', async () => {
   console.log('✅ Connected to Russian VPS...');
   try {
-    console.log('--- Last 40 lines of sslh logs ---');
-    await executeCommand(conn, 'journalctl -n 40 -u sslh');
+    console.log('--- Checking nc availability ---');
+    await executeCommand(conn, 'which nc || echo "no nc"');
 
     conn.end();
   } catch (err) {

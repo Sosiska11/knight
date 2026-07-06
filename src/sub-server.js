@@ -103,9 +103,33 @@ app.get('/sub/:uuid', async (req, res) => {
       } catch (nodeErr) {
         console.error('⚠️ Failed to add dynamic nodes to subscription:', nodeErr.message);
       }
+
+      // Add Hysteria 2 connection URL if configured
+      if (config.XUI_HY2_INBOUND_ID) {
+        const mainHy2Url = await xuiApi.buildHysteria2Link(sub.client_uuid);
+        configsText += mainHy2Url + '\n';
+
+        // Add Hysteria 2 for other active nodes
+        try {
+          const nodes = await xuiApi.getNodes();
+          for (const node of nodes) {
+            if (node.address && !xuiApi.isNodeOffline(node.address)) {
+              const nodeRemark = node.remark
+                ? `${node.remark} | Hysteria 2`
+                : `Узел ${node.id} | Hysteria 2`;
+              const nodeHy2Url = await xuiApi.buildHysteria2Link(sub.client_uuid, node.address, nodeRemark);
+              configsText += nodeHy2Url + '\n';
+            }
+          }
+        } catch (nodeErr) {
+          console.error('⚠️ Failed to add dynamic Hysteria 2 nodes to subscription:', nodeErr.message);
+        }
+      }
     }
 
-    // Add bypass configuration (XHTTP CDN)
+
+    /*
+    // Add bypass configuration (XHTTP CDN) - Temporarily disabled (shelved for later)
     if (!testMode || testMode === 'ru') {
       let bypassUuid = null;
       if (sub.bypass_connection_url) {
@@ -122,6 +146,7 @@ app.get('/sub/:uuid', async (req, res) => {
         configsText += bypassUrl + '\n';
       }
     }
+    */
 
     // Add reserve nodes from goida-vpn-configs
     if (!testMode || testMode === 'de' || testMode === 'ru') {
@@ -145,7 +170,12 @@ app.get('/sub/:uuid', async (req, res) => {
           if (!counts[cCode]) counts[cCode] = 1;
 
           const cInfo = countryNames[cCode] || { name: cCode, flag: '🌐' };
-          const newRemark = `${cInfo.flag} ${cInfo.name} | Резерв ${counts[cCode]++}`;
+          let newRemark;
+          if (cCode === 'RU') {
+            newRemark = `🇷🇺 LTE | Обходка #${counts[cCode]++}`;
+          } else {
+            newRemark = `${cInfo.flag} ${cInfo.name} | Резерв ${counts[cCode]++}`;
+          }
           
           if (url.includes('#')) {
             url = url.split('#')[0] + '#' + newRemark;

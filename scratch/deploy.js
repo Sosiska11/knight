@@ -40,42 +40,25 @@ async function run() {
 
   // 1. Create remote directories
   console.log('Creating remote directories...');
-  await ssh.execCommand(`mkdir -p ${REMOTE_DIR}/src ${REMOTE_DIR}/scratch`);
+  await ssh.execCommand(`mkdir -p ${REMOTE_DIR}`);
 
-  // 2. Upload files
-  const rootFiles = ['.env', 'index.js', 'package.json', 'banner.png'];
-  for (const file of rootFiles) {
-    const localPath = path.join(projectRoot, file);
-    if (fs.existsSync(localPath)) {
-      console.log(`Uploading: ${file} -> ${REMOTE_DIR}/${file}`);
-      await ssh.putFile(localPath, `${REMOTE_DIR}/${file}`);
-    } else {
-      console.log(`⚠️ Skip local file (does not exist): ${file}`);
-    }
+  // 2. Upload archive
+  const localTar = path.join(projectRoot, 'project.tar.gz');
+  console.log(`Uploading archive: project.tar.gz -> ${REMOTE_DIR}/project.tar.gz`);
+  await ssh.putFile(localTar, `${REMOTE_DIR}/project.tar.gz`);
+
+  // 3. Extract on remote server
+  console.log('Extracting archive on VPS...');
+  const extractRes = await ssh.execCommand(`tar -xzf ${REMOTE_DIR}/project.tar.gz -C ${REMOTE_DIR}`);
+  if (extractRes.code !== 0) {
+    console.error('❌ Failed to extract archive:', extractRes.stderr);
+    ssh.dispose();
+    process.exit(1);
   }
 
-  // Upload src directory files
-  const srcDir = path.join(projectRoot, 'src');
-  const srcFiles = fs.readdirSync(srcDir);
-  for (const file of srcFiles) {
-    const localPath = path.join(srcDir, file);
-    if (fs.statSync(localPath).isFile()) {
-      console.log(`Uploading: src/${file} -> ${REMOTE_DIR}/src/${file}`);
-      await ssh.putFile(localPath, `${REMOTE_DIR}/src/${file}`);
-    }
-  }
-
-  // Upload scratch files
-  const scratchFiles = ['migrate-all-bypass.js', 'configure-tcp-bypass-inbound.js', 'create-cdn-inbound.js', 'create-xhttp-inbound.js', 'create-xhttp-get-inbound.js', 'create-splithttp-inbound.js', 'test-splithttp-capabilities.js', 'diag-inbounds.js', 'diag-xhttp-capabilities.js', 'check-uuids-vps.js'];
-  for (const file of scratchFiles) {
-    const localPath = path.join(projectRoot, 'scratch', file);
-    if (fs.existsSync(localPath)) {
-      console.log(`Uploading: scratch/${file} -> ${REMOTE_DIR}/scratch/${file}`);
-      await ssh.putFile(localPath, `${REMOTE_DIR}/scratch/${file}`);
-    }
-  }
-
-  console.log('✅ File transfer completed successfully!');
+  // Cleanup remote archive
+  await ssh.execCommand(`rm ${REMOTE_DIR}/project.tar.gz`);
+  console.log('✅ Archive uploaded and extracted successfully!');
 
   // 3. Environment setup & startup
   console.log('\n--- Checking Node.js ---');

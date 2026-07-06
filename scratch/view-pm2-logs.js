@@ -4,8 +4,10 @@ const config = {
   host: '141.11.197.6',
   port: 22,
   username: 'root',
-  password: 'IxJlIDug5LW5mF5ghOts'
+  password: 'IxJlIDug5LW5mF5ghOts',
+  readyTimeout: 30000
 };
+
 
 const conn = new Client();
 
@@ -33,10 +35,11 @@ conn.on('ready', async () => {
   console.log('✅ Connected to VPS...');
   try {
     console.log('\n--- Output Logs ---');
-    await executeCommand(conn, 'tail -n 30 /root/.pm2/logs/knight-vpn-bot-out.log');
+    await executeCommand(conn, 'tail -n 1000 /root/.pm2/logs/knight-vpn-bot-out.log');
+
 
     console.log('\n--- Error Logs ---');
-    await executeCommand(conn, 'tail -n 30 /root/.pm2/logs/knight-vpn-bot-error.log');
+    await executeCommand(conn, 'tail -n 50 /root/.pm2/logs/knight-vpn-bot-error.log');
 
     conn.end();
   } catch (err) {
@@ -44,3 +47,4 @@ conn.on('ready', async () => {
     conn.end();
   }
 }).connect(config);
+

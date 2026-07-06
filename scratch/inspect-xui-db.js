@@ -37,11 +37,11 @@ conn.on('ready', async () => {
 import sqlite3, json
 conn = sqlite3.connect('/etc/x-ui/x-ui.db')
 cursor = conn.cursor()
-cursor.execute('SELECT id, remark, port, settings, stream_settings FROM inbounds WHERE id=1')
+cursor.execute('SELECT id, remark, port, protocol, settings, stream_settings FROM inbounds')
 rows = cursor.fetchall()
 res = []
 for r in rows:
-    res.append({'id': r[0], 'remark': r[1], 'port': r[2], 'settings': json.loads(r[3]), 'stream_settings': json.loads(r[4])})
+    res.append({'id': r[0], 'remark': r[1], 'port': r[2], 'protocol': r[3], 'settings': json.loads(r[4]), 'stream_settings': json.loads(r[5])})
 print(json.dumps(res, indent=2))
 "`;
     await executeCommand(conn, cmd);
