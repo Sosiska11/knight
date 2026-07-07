@@ -70,9 +70,9 @@ app.get('/sub/:uuid', async (req, res) => {
       if (!mainHost || !xuiApi.isNodeOffline(mainHost)) {
         let connectionUrl = sub.connection_url;
         if (connectionUrl.includes('#')) {
-          connectionUrl = connectionUrl.split('#')[0] + '#🇳🇱 Нидерланды';
+          connectionUrl = connectionUrl.split('#')[0] + '#🇩🇪 Германия';
         } else {
-          connectionUrl = connectionUrl + '#🇳🇱 Нидерланды';
+          connectionUrl = connectionUrl + '#🇩🇪 Германия';
         }
         configsText += connectionUrl + '\n';
       } else {

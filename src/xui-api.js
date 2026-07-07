@@ -1,6 +1,7 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import config from './config.js';
+import * as slaveSync from './slave-sync.js';
 
 function getBypassUuid(mainUuid) {
   const hash = crypto.createHash('sha256').update(mainUuid).digest('hex');
@@ -18,6 +19,8 @@ class XuiClient {
     this.sessionExpiry = null;
     this.offlineNodes = new Set();
     this.hy2ObfsCache = null;
+    this.hy2ObfsCacheAt = 0;
+    this.HY2_OBFS_CACHE_TTL = 10 * 60 * 1000;
   }
 
   // Helper to check if session is still valid
@@ -165,7 +168,7 @@ class XuiClient {
     if (this.mockMode) {
       console.log(`[MOCK] Added client: email=${email}, uuid=${uuid}`);
       // Generate a mock Reality link
-      const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
+      const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇩🇪 Германия`;
       const mockBypassLink = `vless://${bypassUuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
       return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink };
     }
@@ -325,13 +328,16 @@ class XuiClient {
       } else if (bypassInboundId && addedBypass) {
         bypassConnectionUrl = await this.buildRealityLink(bypassInboundId, bypassUuid, email);
       }
+
+      // Push new client to NL slave VPS (managed via slave-sync.js, fire-and-forget)
+      try { slaveSync.noteClientAdd(email); } catch (e) { console.warn('⚠️ slave-sync noteClientAdd failed:', e.message); }
+
       return { email, uuid, connectionUrl, bypassConnectionUrl };
     } catch (error) {
       console.error(`❌ Failed to add client ${email} in 3x-ui:`, error.message);
       // Generate fallback key so user gets SOMETHING and we can debug
-      const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇳🇱 Нидерланды`;
-      const mockBypassLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
-      return { email, uuid, connectionUrl: mockLink, bypassConnectionUrl: mockBypassLink, error: error.message };
+const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=yahoo.com&sid=mockShortId&flow=xtls-rprx-vision#🇩🇪 Германия`;
+      const mockBypassLink = `vless://${bypassUuid}@your-server.com:443?encryption=none&type=tcp&security=reality&pbk=mockPrivateKeyHere&fp=chrome&sni=ya.ru&sid=mockShortId&flow=xtls-rprx-vision#🇷🇺 LTE | Обходка`;
     }
   }
 
@@ -403,18 +409,22 @@ class XuiClient {
 
       if (response.status === 200 && response.data?.success) {
         console.log(`✅ Client ${email} deleted from 3x-ui.`);
+        // Push deletion to NL slave VPS
+        try { slaveSync.noteClientDelete(email); } catch (e) { console.warn('⚠️ slave-sync noteClientDelete failed:', e.message); }
         return true;
       }
 
       // If fallback response status is 404 or it failed because of "not found" / "not exist"
       if (response.status === 404) {
         console.log(`✅ Client ${email} was not found (404) in fallback delete method, considering it deleted.`);
+        try { slaveSync.noteClientDelete(email); } catch (e) { console.warn('⚠️ slave-sync noteClientDelete failed:', e.message); }
         return true;
       }
       if (response.data && !response.data.success) {
         const msg = response.data.msg || '';
         if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('not exist')) {
           console.log(`✅ Client ${email} not found in fallback delete method, considering it deleted.`);
+          try { slaveSync.noteClientDelete(email); } catch (e) { console.warn('⚠️ slave-sync noteClientDelete failed:', e.message); }
           return true;
         }
       }
@@ -433,7 +443,7 @@ class XuiClient {
     // Choose appropriate remark
     const remark = email.endsWith('_bp')
       ? '🇷🇺 LTE | Обходка'
-      : '🇳🇱 Нидерланды';
+      : '🇩🇪 Германия';
 
     if (!inbound) {
       // Fallback if we can't fetch inbound settings
@@ -491,9 +501,9 @@ class XuiClient {
     const host = customHost || defaultHost;
     const port = config.HY2_PORT || 46352;
     const sni = defaultHost;
-    const remark = customRemark || '🇳🇱 Нидерланды | Hysteria 2';
+    const remark = customRemark || '🇩🇪 Германия | Hysteria 2';
 
-    if (this.hy2ObfsCache === null) {
+    if (this.hy2ObfsCache === null || (this.hy2ObfsCacheAt && Date.now() - this.hy2ObfsCacheAt > this.HY2_OBFS_CACHE_TTL)) {
       if (config.XUI_HY2_INBOUND_ID) {
         try {
           const inbound = await this.getInbound(config.XUI_HY2_INBOUND_ID);
@@ -509,19 +519,23 @@ class XuiClient {
                 console.log(`ℹ️ Cached Hysteria 2 obfuscation parameters: ${this.hy2ObfsCache}`);
               } else {
                 this.hy2ObfsCache = '';
+                console.log('ℹ️ Hysteria 2 inbound has no obfs (no type/password). Subscription links will be plain.');
               }
             } else {
               this.hy2ObfsCache = '';
+              console.log('ℹ️ Hysteria 2 inbound has no finalmask/udp. Subscription links will be plain.');
             }
           } else {
             this.hy2ObfsCache = '';
           }
+          this.hy2ObfsCacheAt = Date.now();
         } catch (err) {
           console.error('❌ Failed to fetch Hysteria 2 inbound settings for caching:', err.message);
           // Do not cache failure permanently so we can retry later
         }
       } else {
         this.hy2ObfsCache = '';
+        this.hy2ObfsCacheAt = Date.now();
       }
     }
 
