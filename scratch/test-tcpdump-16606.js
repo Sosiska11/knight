@@ -2,7 +2,7 @@ import { Client } from 'ssh2';
 import net from 'net';
 
 const config = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605,
   username: 'root',
   password: 'aSE2VhyajWS2d'
@@ -47,7 +47,7 @@ conn.on('ready', async () => {
     await new Promise((resolve) => {
       const socket = new net.Socket();
       socket.setTimeout(3000);
-      socket.connect(16606, '79.137.162.56', () => {
+      socket.connect(16606, '127.0.0.1', () => {
         console.log('✅ Local socket reported: Connected!');
         socket.write('test-payload');
         setTimeout(() => {

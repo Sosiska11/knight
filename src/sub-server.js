@@ -62,47 +62,33 @@ app.get('/sub/:uuid', async (req, res) => {
     const mainHostMatch = sub.connection_url.match(/@([^:]+):/);
     const mainHost = mainHostMatch ? mainHostMatch[1] : null;
 
+    const baseConnectionUrl = (sub.connection_url || '').replace(/sni=[^&]+/g, 'sni=www.google.com');
+
     let configsText = '';
 
     const showMain = !testMode || testMode === 'main' || testMode === 'clean';
 
     if (showMain) {
       if (!mainHost || !xuiApi.isNodeOffline(mainHost)) {
-        let connectionUrl = sub.connection_url;
-        if (connectionUrl.includes('#')) {
-          connectionUrl = connectionUrl.split('#')[0] + '#🇩🇪 Германия';
-        } else {
-          connectionUrl = connectionUrl + '#🇩🇪 Германия';
-        }
-        configsText += connectionUrl + '\n';
+        const clientUuid = sub.client_uuid;
+        const relayIp = '31.76.46.20';
+
+        // 1. Poland VLESS TCP Reality connection URL (Direct, top-priority)
+        const polandVless = `vless://${clientUuid}@188.255.163.236:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=dl.google.com&pbk=RWc0hf-pPEhU9h91ly1Dax4oFRSdOGzmtnqMZ6arfj8&fp=chrome&sid=9d&type=tcp#${encodeURIComponent('🇵🇱 Польша')}`;
+        configsText += polandVless + '\n';
+
+        // 1b. Poland Hysteria 2 Direct connection URL (UDP, no relay)
+        const polandHy2 = `hysteria2://${clientUuid}@188.255.163.236:25000?sni=sub.knight1.space&alpn=h3#${encodeURIComponent('🇵🇱 Польша | Hysteria 2')}`;
+        configsText += polandHy2 + '\n';
+
+        // 2. Germany TUIC v5 connection URL (relayed via Finland over QUIC UDP)
+        const tuicLink = `tuic://${clientUuid}@${relayIp}:8448?sni=sub.knight1.space&alpn=h3&congestion_control=bbr#${encodeURIComponent('🇩🇪 Германия | TUIC')}`;
+        configsText += tuicLink + '\n';
       } else {
         console.log(`⏩ Skipping offline main node: ${mainHost}`);
       }
 
-      // Fetch active nodes from 3x-ui and dynamically add VLESS links for them
-      try {
-        const nodes = await xuiApi.getNodes();
-        for (const node of nodes) {
-          if (node.address) {
-            // Check if this node is marked as offline
-            if (xuiApi.isNodeOffline(node.address)) {
-              console.log(`⏩ Skipping offline node: ${node.address}`);
-              continue;
-            }
-
-            // Replace host in connection_url with node.address
-            let nodeUrl = sub.connection_url.replace(/@([^:]+):/, `@${node.address}:`);
-            
-            // Set name/remark for the node (e.g. #🇩🇪 Германия)
-            const nodeRemark = node.remark || `Узел ${node.id}`;
-            nodeUrl = nodeUrl.split('#')[0] + '#' + nodeRemark;
-            
-            configsText += nodeUrl + '\n';
-          }
-        }
-      } catch (nodeErr) {
-        console.error('⚠️ Failed to add dynamic nodes to subscription:', nodeErr.message);
-      }
+      // Dynamic VLESS TCP/gRPC nodes disabled (blocked by ISP and TSPU)
 
       // Add Hysteria 2 connection URL if configured
       if (config.XUI_HY2_INBOUND_ID) {
@@ -113,7 +99,15 @@ app.get('/sub/:uuid', async (req, res) => {
         try {
           const nodes = await xuiApi.getNodes();
           for (const node of nodes) {
-            if (node.address && !xuiApi.isNodeOffline(node.address)) {
+            if (node.address) {
+              // Skip Poland — it has a dedicated static Hysteria 2 profile above with correct port/SNI
+              if (node.address === '188.255.163.236' || node.address === process.env.PL_SSH_HOST) {
+                continue;
+              }
+              const isStaticNode = node.address === '194.50.94.46' || node.address === '31.76.46.20' || node.address === process.env.NL_SSH_HOST || node.address === process.env.FI_SSH_HOST;
+              if (!isStaticNode && xuiApi.isNodeOffline(node.address)) {
+                continue;
+              }
               const nodeRemark = node.remark
                 ? `${node.remark} | Hysteria 2`
                 : `Узел ${node.id} | Hysteria 2`;
@@ -128,8 +122,8 @@ app.get('/sub/:uuid', async (req, res) => {
     }
 
 
+    // Bypass configurations (XHTTP Direct and CDN) - Disabled because direct TCP is blocked by ISP and custom ports are blocked by host DDoS filter
     /*
-    // Add bypass configuration (XHTTP CDN) - Temporarily disabled (shelved for later)
     if (!testMode || testMode === 'ru') {
       let bypassUuid = null;
       if (sub.bypass_connection_url) {
@@ -142,6 +136,11 @@ app.get('/sub/:uuid', async (req, res) => {
       }
 
       if (bypassUuid) {
+        // Direct Germany VLESS XHTTP over Port 3000 (Low-latency)
+        const directBypassUrl = xuiApi.buildXhttpDirectLink(bypassUuid);
+        configsText += directBypassUrl + '\n';
+
+        // CDN Germany VLESS XHTTP over Port 443 (Unblockable backup)
         const bypassUrl = xuiApi.buildXhttpLink(bypassUuid);
         configsText += bypassUrl + '\n';
       }
@@ -188,6 +187,8 @@ app.get('/sub/:uuid', async (req, res) => {
         console.error('⚠️ Failed to add reserve nodes to subscription:', resErr.message);
       }
     }
+
+    // Custom VLESS gRPC node disabled (blocked by ISP and TSPU)
 
     // Base64 encode the connection URLs (standard format for V2Ray subscriptions)
     const base64Config = Buffer.from(configsText).toString('base64');
@@ -1043,8 +1044,8 @@ export function startSubServer() {
         key: fs.readFileSync(keyPath),
         cert: fs.readFileSync(certPath)
       };
-      https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
-        console.log(`🔒 SECURE Subscription server running on https://0.0.0.0:${PORT}`);
+      https.createServer(options, app).listen(PORT, '127.0.0.1', () => {
+        console.log(`🔒 SECURE Subscription server running on https://127.0.0.1:${PORT}`);
       });
       return;
     } catch (err) {
@@ -1052,7 +1053,7 @@ export function startSubServer() {
     }
   }
 
-  http.createServer(app).listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 Subscription server running on http://0.0.0.0:${PORT}`);
+  http.createServer(app).listen(PORT, '127.0.0.1', () => {
+    console.log(`🌐 Subscription server running on http://127.0.0.1:${PORT}`);
   });
 }

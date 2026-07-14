@@ -47,7 +47,7 @@ conn.on('ready', async () => {
     
     await new Promise((resolve) => {
       const socket = tls.connect({
-        host: '79.137.162.56',
+        host: '127.0.0.1',
         port: 16606,
         servername: 'max.ru',
         rejectUnauthorized: false,

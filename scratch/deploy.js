@@ -8,9 +8,9 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.join(__dirname, '..');
 
 const config = {
-  host: '141.11.197.6',
+  host: '144.31.196.245',
   username: 'root',
-  password: 'IxJlIDug5LW5mF5ghOts'
+  password: 'Kng-73_vPs!98aB'
 };
 
 const REMOTE_DIR = '/root/knight-vpn-bot';

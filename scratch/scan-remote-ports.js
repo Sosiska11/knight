@@ -30,7 +30,7 @@ conn.on('ready', async () => {
   console.log('✅ Connected to Netherlands VPS...');
   try {
     for (let port = 16600; port <= 16620; port++) {
-      const res = await executeCommand(conn, `nc -zv -w 2 79.137.162.56 ${port}`);
+      const res = await executeCommand(conn, `nc -zv -w 2 127.0.0.1 ${port}`);
       const success = res.code === 0 || res.stdout.includes('succeeded') || res.stderr.includes('succeeded');
       if (success) {
         console.log(`Port ${port}: OPEN`);

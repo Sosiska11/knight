@@ -33,10 +33,10 @@ conn.on('ready', async () => {
   console.log('✅ Connected to Netherlands VPS...');
   try {
     console.log('\n--- Checking if port 8443 on Russian VPS is open ---');
-    await executeCommand(conn, 'nc -zv -w 5 79.137.162.56 8443');
+    await executeCommand(conn, 'nc -zv -w 5 127.0.0.1 8443');
     
     console.log('\n--- Checking if port 16605 (SSH) on Russian VPS is open ---');
-    await executeCommand(conn, 'nc -zv -w 5 79.137.162.56 16605');
+    await executeCommand(conn, 'nc -zv -w 5 127.0.0.1 16605');
     
     conn.end();
   } catch (err) {

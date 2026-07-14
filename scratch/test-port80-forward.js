@@ -33,10 +33,10 @@ conn.on('ready', async () => {
   console.log('✅ Connected to Netherlands VPS...');
   try {
     console.log('\n--- Checking port 80 on Russian VPS ---');
-    await executeCommand(conn, 'nc -zv -w 5 79.137.162.56 80');
+    await executeCommand(conn, 'nc -zv -w 5 127.0.0.1 80');
     
     console.log('\n--- Checking plain HTTP curl to Russian VPS on port 80 ---');
-    await executeCommand(conn, 'curl -v --connect-timeout 5 http://79.137.162.56:80 || true');
+    await executeCommand(conn, 'curl -v --connect-timeout 5 http://127.0.0.1:80 || true');
     
     conn.end();
   } catch (err) {

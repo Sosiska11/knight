@@ -32,8 +32,8 @@ function executeCommand(conn, cmd) {
 conn.on('ready', async () => {
   console.log('✅ Connected to Netherlands VPS...');
   try {
-    await executeCommand(conn, 'nc -zv -w 5 79.137.162.56 16605; echo "Exit code: $?"');
-    await executeCommand(conn, 'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@79.137.162.56 -p 16605 "echo ssh_works" || echo "ssh failed"');
+    await executeCommand(conn, 'nc -zv -w 5 127.0.0.1 16605; echo "Exit code: $?"');
+    await executeCommand(conn, 'ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@127.0.0.1 -p 16605 "echo ssh_works" || echo "ssh failed"');
     conn.end();
   } catch (err) {
     console.error('Error:', err);

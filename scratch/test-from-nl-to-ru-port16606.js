@@ -1,7 +1,7 @@
 import { Client } from 'ssh2';
 
 const russianConfig = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605,
   username: 'root',
   password: 'aSE2VhyajWS2d'
@@ -65,7 +65,7 @@ async function runTest() {
 
     // 3. Connect from NL VPS to RU VPS port 16606
     console.log('Connecting from NL VPS to RU VPS port 16606...');
-    const ncRes = await executeNL('nc -zv -w 5 79.137.162.56 16606');
+    const ncRes = await executeNL('nc -zv -w 5 127.0.0.1 16606');
     console.log('nc output:', ncRes.stdout || ncRes.stderr);
 
     // 4. Kill tcpdump

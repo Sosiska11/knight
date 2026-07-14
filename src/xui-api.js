@@ -1,5 +1,6 @@
 import axios from 'axios';
 import crypto from 'crypto';
+import { exec } from 'child_process';
 import config from './config.js';
 import * as slaveSync from './slave-sync.js';
 
@@ -21,11 +22,19 @@ class XuiClient {
     this.hy2ObfsCache = null;
     this.hy2ObfsCacheAt = 0;
     this.HY2_OBFS_CACHE_TTL = 10 * 60 * 1000;
+    this.publicHost = '144.31.196.245'; // Direct IP to bypass domain blocking
   }
 
   // Helper to check if session is still valid
   isLoggedIn() {
     return this.cookie && this.csrfToken && this.sessionExpiry && Date.now() < this.sessionExpiry;
+  }
+
+  triggerTuicSync() {
+    exec('python3 /root/sync_tuic.py', (err, stdout, stderr) => {
+      if (err) console.error('⚠️ TUIC sync failed:', err.message);
+      else console.log('✅ TUIC sync triggered successfully.');
+    });
   }
 
   // Authenticate with 3x-ui panel
@@ -332,6 +341,8 @@ class XuiClient {
       // Push new client to NL slave VPS (managed via slave-sync.js, fire-and-forget)
       try { slaveSync.noteClientAdd(email); } catch (e) { console.warn('⚠️ slave-sync noteClientAdd failed:', e.message); }
 
+      this.triggerTuicSync();
+
       return { email, uuid, connectionUrl, bypassConnectionUrl };
     } catch (error) {
       console.error(`❌ Failed to add client ${email} in 3x-ui:`, error.message);
@@ -411,6 +422,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
         console.log(`✅ Client ${email} deleted from 3x-ui.`);
         // Push deletion to NL slave VPS
         try { slaveSync.noteClientDelete(email); } catch (e) { console.warn('⚠️ slave-sync noteClientDelete failed:', e.message); }
+        this.triggerTuicSync();
         return true;
       }
 
@@ -418,6 +430,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
       if (response.status === 404) {
         console.log(`✅ Client ${email} was not found (404) in fallback delete method, considering it deleted.`);
         try { slaveSync.noteClientDelete(email); } catch (e) { console.warn('⚠️ slave-sync noteClientDelete failed:', e.message); }
+        this.triggerTuicSync();
         return true;
       }
       if (response.data && !response.data.success) {
@@ -425,6 +438,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
         if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('not exist')) {
           console.log(`✅ Client ${email} not found in fallback delete method, considering it deleted.`);
           try { slaveSync.noteClientDelete(email); } catch (e) { console.warn('⚠️ slave-sync noteClientDelete failed:', e.message); }
+          this.triggerTuicSync();
           return true;
         }
       }
@@ -471,10 +485,10 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
       const fp = reality.fingerprint || reality.settings?.fingerprint || 'chrome';
       const spiderX = reality.settings?.spiderX || reality.spiderX || '';
 
-      // Parse domain from baseUrl or use IP
-      let host = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
+      // Use direct IP instead of domain name to bypass DNS-level domain blocking
+      let host = this.publicHost;
       
-      let link = `vless://${uuid}@${host}:${port}?encryption=none&type=${type}&security=reality&pbk=${publicKey}&fp=${fp}&sni=${sni}&sid=${shortId}`;
+      let link = `vless://${uuid}@${host}:${port === 7443 ? 3000 : port}?encryption=none&type=${type}&security=reality&pbk=${publicKey}&fp=${fp}&sni=${sni}&sid=${shortId}`;
       
       if (spiderX) {
         link += `&spx=${encodeURIComponent(spiderX)}`;
@@ -485,6 +499,12 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
       } else if (type === 'grpc') {
         const serviceName = streamSettings.grpcSettings?.serviceName || 'grpc';
         link += `&serviceName=${serviceName}`;
+      } else if (type === 'xhttp') {
+        const xhttpSettings = streamSettings.xhttpSettings || {};
+        const path = encodeURIComponent(xhttpSettings.path || '/download');
+        const mode = xhttpSettings.mode || 'packet-up';
+        const xhttpHost = xhttpSettings.host || sni;
+        link += `&host=${xhttpHost}&path=${path}&mode=${mode}`;
       }
       
       link += `#${remark}`;
@@ -497,10 +517,24 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
   }
 
   async buildHysteria2Link(uuid, customHost = null, customRemark = null) {
-    const defaultHost = this.baseUrl.replace(/https?:\/\//, '').split(':')[0];
-    const host = customHost || defaultHost;
-    const port = config.HY2_PORT || 46352;
-    const sni = defaultHost;
+    const defaultHost = this.publicHost;
+    let host = customHost || defaultHost;
+    let port = config.HY2_PORT || 46352;
+    let extraParams = '';
+    if (host === '31.76.46.20' || host === 'fi.node-ping-stat.ru' || host === process.env.FI_SSH_HOST) {
+      port = 443;
+    } else if (host === '194.50.94.46' || host === process.env.NL_SSH_HOST) {
+      // NL is relayed via Finland (mport 10000-15000) — direct NL UDP is blocked by TSPU
+      host = '31.76.46.20';
+      port = 10000;
+      extraParams = '&mport=10000-15000';
+    } else if (host === '144.31.196.245' || host === 'sub.knight1.space' || host === defaultHost) {
+      host = '31.76.46.20';
+      port = 20000;
+      extraParams = '&mport=20000-50000';
+    }
+    // Use sub.knight1.space as SNI for all nodes
+    const sni = 'sub.knight1.space';
     const remark = customRemark || '🇩🇪 Германия | Hysteria 2';
 
     if (this.hy2ObfsCache === null || (this.hy2ObfsCacheAt && Date.now() - this.hy2ObfsCacheAt > this.HY2_OBFS_CACHE_TTL)) {
@@ -540,14 +574,14 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
     }
 
     const obfsParams = this.hy2ObfsCache || '';
-    return `hysteria2://${uuid}@${host}:${port}?sni=${sni}&alpn=h3${obfsParams}#${remark}`;
+    return `hysteria2://${uuid}@${host}:${port}?sni=${sni}&alpn=h3${extraParams}${obfsParams}#${remark}`;
   }
 
   buildXhttpLink(bypassUuid) {
     const host = config.CDN_DOMAIN || 'cdn.node-ping-stat.ru';
     const xhttpPath = encodeURIComponent((config.XHTTP_PATH || '/knight-down').replace(/\/+$/, ''));
     const xhttpMode = config.XHTTP_MODE || 'packet-up';
-    const remark = '🇷🇺 LTE | Обходка';
+    const remark = '🇩🇪 Германия | CDN (XHTTP)';
     const extraObj = {
       xPaddingBytes: "100-1000",
       scMaxEachPostBytes: "100000-1000000",
@@ -557,6 +591,24 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
     };
     const extra = encodeURIComponent(JSON.stringify(extraObj));
     return `vless://${bypassUuid}@${host}:443?encryption=none&type=xhttp&security=tls&sni=${host}&host=${host}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}#${remark}`;
+  }
+
+  buildXhttpDirectLink(bypassUuid) {
+    const host = this.publicHost;
+    const port = 3000;
+    const sni = 'sub.knight1.space';
+    const xhttpPath = encodeURIComponent('/knight-down');
+    const xhttpMode = config.XHTTP_MODE || 'packet-up';
+    const remark = '🇩🇪 Германия | Обходной (XHTTP)';
+    const extraObj = {
+      xPaddingBytes: "100-1000",
+      scMaxEachPostBytes: "100000-1000000",
+      scMinPostsIntervalMs: "10-30",
+      scMaxBufferedPosts: 30,
+      noGRPCHeader: false
+    };
+    const extra = encodeURIComponent(JSON.stringify(extraObj));
+    return `vless://${bypassUuid}@${host}:${port}?encryption=none&type=xhttp&security=tls&sni=${sni}&host=${sni}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}#${remark}`;
   }
 
   // Get active client IPs

@@ -23,7 +23,7 @@ const MAIN_VPS = {
 };
 
 const RU_VPS = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605,
   username: 'root',
   password: 'aSE2VhyajWS2d'

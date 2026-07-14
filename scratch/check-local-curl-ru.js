@@ -1,7 +1,7 @@
 import { Client } from 'ssh2';
 
 const config = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605,
   username: 'root',
   password: 'aSE2VhyajWS2d'
@@ -39,7 +39,7 @@ conn.on('ready', async () => {
     await executeCommand(conn, 'curl -I http://192.168.20.141 || echo "curl failed"');
 
     console.log('\n--- Curl public IP on port 80 ---');
-    await executeCommand(conn, 'curl -I http://79.137.162.56 || echo "curl failed"');
+    await executeCommand(conn, 'curl -I http://127.0.0.1 || echo "curl failed"');
 
     conn.end();
   } catch (err) {

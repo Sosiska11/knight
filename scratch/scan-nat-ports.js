@@ -2,7 +2,7 @@ import { Client } from 'ssh2';
 import net from 'net';
 
 const russianConfig = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605,
   username: 'root',
   password: 'aSE2VhyajWS2d'
@@ -55,7 +55,7 @@ async function runTest() {
       const success = await new Promise((resolve) => {
         const socket = new net.Socket();
         socket.setTimeout(800);
-        socket.connect(port, '79.137.162.56', () => {
+        socket.connect(port, '127.0.0.1', () => {
           socket.destroy();
           resolve(true);
         });

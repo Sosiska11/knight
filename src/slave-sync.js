@@ -1,21 +1,43 @@
-// Auto-sync clients to NL slave VPS (194.50.94.46)
-// Triggered after success addClient/deleteClient on master.
-// Full reseed: copies inbounds 1,3 settings + clients + client_inbounds from master DB to NL DB, restarts x-ui on NL.
+import { execSync } from 'child_process';
 import { NodeSSH } from 'node-ssh';
 import config from './config.js';
 
-const NL_HOST = process.env.NL_SSH_HOST || '194.50.94.46';
-const NL_USER = process.env.NL_SSH_USER || 'root';
-const NL_PASS = process.env.NL_SSH_PASSWORD || '';
-const NL_DB = process.env.NL_XUI_DB || '/etc/x-ui/x-ui.db';
 const DE_DB = '/etc/x-ui/x-ui.db';
+
+const SLAVE_NODES = [
+  {
+    name: 'Netherlands',
+    enabled: () => process.env.SYNC_TO_NL === 'true' && !!process.env.NL_SSH_PASSWORD,
+    host: () => process.env.NL_SSH_HOST || '194.50.94.46',
+    user: () => process.env.NL_SSH_USER || 'root',
+    pass: () => process.env.NL_SSH_PASSWORD || '',
+    db: () => process.env.NL_XUI_DB || '/etc/x-ui/x-ui.db'
+  },
+  {
+    name: 'Finland',
+    enabled: () => process.env.SYNC_TO_FI === 'true' && !!process.env.FI_SSH_PASSWORD,
+    host: () => process.env.FI_SSH_HOST || '31.76.46.20',
+    user: () => process.env.FI_SSH_USER || 'root',
+    pass: () => process.env.FI_SSH_PASSWORD || '',
+    db: () => process.env.FI_XUI_DB || '/etc/x-ui/x-ui.db'
+  },
+  {
+    name: 'Poland',
+    enabled: () => process.env.SYNC_TO_PL === 'true' && !!process.env.PL_SSH_PASSWORD,
+    host: () => process.env.PL_SSH_HOST || '188.255.163.236',
+    user: () => process.env.PL_SSH_USER || 'root',
+    pass: () => process.env.PL_SSH_PASSWORD || '',
+    db: () => process.env.PL_XUI_DB || '/etc/x-ui/x-ui.db'
+  }
+];
 
 let lastSyncAt = 0;
 let syncInFlight = false;
-const MIN_INTERVAL_MS = 5000; // throttle: at most one sync per 5 seconds
+const MIN_INTERVAL_MS = 5000;
 
-function isEnabled() {
-  return process.env.SYNC_TO_NL === 'true' && !!NL_PASS && !config.MOCK_XUI;
+function getEnabledNodes() {
+  if (config.MOCK_XUI) return [];
+  return SLAVE_NODES.filter(node => node.enabled());
 }
 
 function esc(v) {
@@ -23,136 +45,172 @@ function esc(v) {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-async function sshExec(ssh, cmd, opts = {}) {
-  const r = await ssh.execCommand(cmd, { execOptions: { pty: false }, ...opts });
-  return r;
-}
-
-async function connect() {
-  const ssh = new NodeSSH();
-  for (let i = 0; i < 3; i++) {
-    try { await ssh.connect({ host: NL_HOST, username: NL_USER, password: NL_PASS, readyTimeout: 15000 }); return ssh; }
-    catch (e) { if (i === 2) throw e; await new Promise(r => setTimeout(r, 2000)); }
-  }
-}
-
-async function readRowsViaMasterSSH(sshDE, sql) {
-  // master is the bot's own VPS, connect directly
-  const r = await sshDE.execCommand(`sqlite3 -json ${DE_DB} "${sql.replace(/"/g, '\\"')}"`);
-  try { return JSON.parse(r.stdout || '[]'); } catch (e) { return []; }
-}
-
-// Connect to master directly (it is on the same host the bot runs on; use localhost)
-async function getMasterRows(sql) {
-  let ssh;
+function runMasterSql(sql) {
   try {
-    const { NodeSSH } = await import('node-ssh');
-    ssh = new NodeSSH();
-    await ssh.connect({ host: '127.0.0.1', username: process.env.DE_SSH_USER || 'root', password: process.env.DE_SSH_PASSWORD || '', readyTimeout: 5000 });
+    const out = execSync(`sqlite3 -json ${DE_DB} "${sql.replace(/"/g, '\\"')}"`, { encoding: 'utf8', timeout: 5000 });
+    return JSON.parse(out || '[]');
   } catch (e) {
-    // Fallback: use cp-based approach. We can't read master DB without SSH password. Skip sync.
+    console.error(`🔁 master DB read error: ${e.message.substring(0, 200)}`);
     return null;
   }
+}
+
+async function connectNode(node) {
+  console.log(`    [connectNode] Initiating SSH connection to ${node.name} (${node.host()})...`);
+  const ssh = new NodeSSH();
+  const host = node.host();
+  const user = node.user();
+  const pass = node.pass();
+  
+  const options = {
+    host,
+    username: user,
+    password: pass,
+    readyTimeout: 15000,
+    localIdent: 'SSH-2.0-OpenSSH_9.0'
+  };
+
   try {
-    return await readRowsViaMasterSSH(ssh, sql);
-  } finally {
-    ssh.dispose();
+    await ssh.connect(options);
+    console.log(`    [connectNode] Connected to ${node.name} successfully!`);
+    return ssh;
+  } catch (e) {
+    console.error(`    [connectNode] Failed to connect to ${node.name}:`, e.message);
+    throw e;
   }
 }
 
-// Public: full re-seed triggered addClient/deleteClient
 export async function resyncNLInBackground(reason = '') {
-  if (!isEnabled()) return;
-  if (syncInFlight) { console.log(`🔁 NL sync already running, skip (${reason})`); return; }
-  if (Date.now() - lastSyncAt < MIN_INTERVAL_MS) { console.log(`🔁 NL sync throttled, skip (${reason})`); return; }
+  const enabledNodes = getEnabledNodes();
+  if (enabledNodes.length === 0) {
+    console.log('🔁 No slave nodes enabled for sync.');
+    return;
+  }
+
+  if (syncInFlight) {
+    console.log(`🔁 Slave sync already running, skip (${reason})`);
+    return;
+  }
+  if (Date.now() - lastSyncAt < MIN_INTERVAL_MS) {
+    console.log(`🔁 Slave sync throttled, skip (${reason})`);
+    return;
+  }
   syncInFlight = true;
   lastSyncAt = Date.now();
 
   try {
-    console.log(`🔁 Resync to NL VPS started (${reason})…`);
-    const NL = await connect();
-    try {
-      // Step 1: pull inbounds 1,3 + clients + client_inbounds from NL DB itself (since master and NL share same `clients` table schema)
-      // We must pull from master through SSH. The bot runs ON master, so we read /etc/x-ui/x-ui.db locally.
-      // But we don't have shell access locally — bot runs in Node, no sqlite3 by default. Use sqlite3 CLI on the master via local SSH.
-      const NL = await connect();
+    console.log(`🔁 Resync to slave VPS nodes started (${reason})…`);
 
-      // Pull current NL rows
-      const nlInbJson = await sshExec(NL, `sqlite3 -json ${NL_DB} "SELECT id,settings FROM inbounds WHERE id IN (1,3);"`).then(r => r.stdout || '[]');
-      const nlInbs = JSON.parse(nlInbJson || '[]');
-      if (nlInbs.length === 0) { console.log('🔁 NL has no inbound 1 or 3 — nothing to resync.'); return; }
+    // 1. Read master list of clients bound to inbound 1 or 3
+    const clColsArr = 'id,email,sub_id,uuid,password,auth,flow,security,reverse,limit_ip,total_gb,expiry_time,enable,tg_id,group_name,comment,reset,created_at,updated_at,wg_private_key,wg_public_key,wg_allowed_ips,wg_pre_shared_key,wg_keep_alive'.split(',');
+    const clientIdRows = runMasterSql('SELECT DISTINCT client_id AS id FROM client_inbounds WHERE inbound_id IN (1,3);');
+    if (clientIdRows === null) {
+      console.warn('🔁 abort: cant read master DB');
+      return;
+    }
+    const clientIdset = clientIdRows.map(r => r.id);
+    if (clientIdset.length === 0) {
+      console.log('🔁 no clients to sync');
+      return;
+    }
 
-      // Pull master rows from local DB
-      const fs = await import('fs');
-      // We use sqlite3 CLI on master locally. But our process is a different user (root in pm2), has access /etc/x-ui/x-ui.db.
-      // Use child_process execSync sqlite3 to read master DB
-      const { execSync } = await import('child_process');
-      const runMasterSql = (sql) => {
-        try {
-          const out = execSync(`sqlite3 -json ${DE_DB} "${sql.replace(/"/g, '\\"')}"`, { encoding: 'utf8' });
-          return JSON.parse(out || '[]');
-        } catch (e) {
-          console.error('🔁 master DB read error:', e.message.substring(0, 200));
-          return [];
+    const clients = runMasterSql(`SELECT ${clColsArr.join(',')} FROM clients WHERE id IN (${clientIdset.join(',')});`);
+    if (clients === null) {
+      console.warn('🔁 abort: cant read master clients');
+      return;
+    }
+
+    const links = runMasterSql('SELECT client_id, inbound_id, flow_override, created_at FROM client_inbounds WHERE inbound_id IN (1,2,3);');
+    if (links === null) {
+      console.warn('🔁 abort: cant read master client_inbounds');
+      return;
+    }
+
+    console.log(`Found ${clients.length} clients and ${links.length} client_inbounds to sync.`);
+
+    // 2. Loop and sync to each enabled node
+    for (const node of enabledNodes) {
+      let ssh = null;
+      const dbPath = node.db();
+      try {
+        console.log(`  ➔ Syncing to node: ${node.name} (${node.host()})...`);
+        ssh = await connectNode(node);
+
+        // Verify node has inbounds 1, 2, 3
+        const checkCmd = `sqlite3 ${dbPath} "PRAGMA busy_timeout = 2000; SELECT count(*) AS n FROM inbounds WHERE id IN (1,2,3);"`;
+        const inbCheck = await ssh.execCommand(checkCmd).then(r => parseInt((r.stdout || '0').trim(), 10));
+        if (isNaN(inbCheck) || inbCheck < 3) {
+          console.warn(`  🔁 Node ${node.name} has only ${inbCheck} of 3 expected inbounds — aborting sync for this node.`);
+          continue;
         }
-      };
 
-      const ibColSql = 'id,user_id,up,down,total,remark,sub_sort_index,enable,expiry_time,traffic_reset,last_traffic_reset_time,listen,port,protocol,settings,stream_settings,tag,sniffing';
-      const inbounds = runMasterSql(`SELECT ${ibColSql} FROM inbounds WHERE id IN (1,3);`);
-      const clientIdset = runMasterSql('SELECT DISTINCT client_id FROM client_inbounds WHERE inbound_id IN (1,3);').map(r => r.client_id);
-      const clColsArr = 'id,email,sub_id,uuid,password,auth,flow,security,reverse,limit_ip,total_gb,expiry_time,enable,tg_id,group_name,comment,reset,created_at,updated_at,wg_private_key,wg_public_key,wg_allowed_ips,wg_pre_shared_key,wg_keep_alive'.split(',');
-      const clients = clientIdset.length > 0 ? runMasterSql(`SELECT ${clColsArr.join(',')} FROM clients WHERE id IN (${clientIdset.join(',')});`) : [];
-      const links = runMasterSql('SELECT client_id, inbound_id, flow_override, created_at FROM client_inbounds WHERE inbound_id IN (1,3);');
+        // Stop x-ui briefly to write safely
+        await ssh.execCommand('systemctl stop x-ui || true');
+        
+        // Backup
+        const ts = Math.floor(Date.now()/60000);
+        await ssh.execCommand(`test -f ${dbPath}.auto-${ts} || cp ${dbPath} ${dbPath}.auto-${ts}`);
 
-      // Apply on NL: stop service, wipe dups, INSERT, start
-      await sshExec(NL, 'systemctl stop x-ui');
-      await sshExec(NL, 'cp ' + NL_DB + ' ' + NL_DB + '.resync-backup-$(date +%s)');
+        // Generate consolidated SQL statements
+        let sqlStatements = [];
+        sqlStatements.push('PRAGMA busy_timeout = 5000;');
+        sqlStatements.push('BEGIN TRANSACTION;');
 
-      const exe = (sql) => sshExec(NL, `sqlite3 ${NL_DB} "${sql.replace(/"/g, '\\"')}"`);
-      await exe('DELETE FROM client_inbounds WHERE inbound_id IN (1,3);');
-      await exe('DELETE FROM inbounds WHERE id IN (1,3);');
-      if (clientIdset.length > 0) {
-        await exe(`DELETE FROM clients WHERE id IN (${clientIdset.join(',')});`);
+        // Delete existing and insert fresh clients
+        for (const c of clients) {
+          sqlStatements.push(`DELETE FROM clients WHERE id=${c.id};`);
+          sqlStatements.push(`INSERT INTO clients (${clColsArr.join(',')}) VALUES (${clColsArr.map(k => esc(c[k])).join(',')});`);
+        }
+
+        // Rebuild client_inbounds relationships
+        sqlStatements.push('DELETE FROM client_inbounds WHERE inbound_id IN (1,2,3);');
+        for (const l of links) {
+          sqlStatements.push(`INSERT INTO client_inbounds (client_id,inbound_id,flow_override,created_at) VALUES (${l.client_id},${l.inbound_id},${l.flow_override ? esc(l.flow_override) : 'NULL'},${l.created_at || 'NULL'});`);
+        }
+
+        // Delete orphans
+        const masterIdList = clientIdset.join(',');
+        sqlStatements.push(`DELETE FROM clients WHERE id NOT IN (${masterIdList});`);
+
+        sqlStatements.push('COMMIT;');
+
+        const fullSql = sqlStatements.join('\n');
+
+        // Write SQL script to remote temp file
+        const remoteSqlFile = '/tmp/knight_sync.sql';
+        await ssh.execCommand(`cat << 'EOF' > ${remoteSqlFile}\n${fullSql}\nEOF`);
+
+        // Execute SQL script in a single transaction
+        const syncRes = await ssh.execCommand(`sqlite3 ${dbPath} < ${remoteSqlFile}`);
+        if (syncRes.stderr) {
+          console.error(`    [slave-sync] ${node.name} SQL execution warning/error:`, syncRes.stderr);
+        }
+
+        // Clean up temp file
+        await ssh.execCommand(`rm -f ${remoteSqlFile}`);
+
+        console.log(`  ✅ Node ${node.name} sync complete.`);
+      } catch (nodeErr) {
+        console.error(`  ❌ Node ${node.name} sync failed: ${nodeErr.message}`);
+      } finally {
+        if (ssh) {
+          try {
+            await ssh.execCommand('systemctl start x-ui');
+          } catch (e) {}
+          ssh.dispose();
+        }
       }
-
-      // Insert inbounds (overlap with NL schema cols subset)
-      const ibCols = ibColSql.split(',');
-      for (const ib of inbounds) {
-        const sql = `INSERT INTO inbounds (${ibCols.join(',')}) VALUES (${ibCols.map(c => esc(ib[c])).join(',')});`;
-        const r = await exe(sql);
-        if (r.stderr && !r.stderr.includes('UNIQUE')) console.log(`🔁 inbound ${ib.id}: ${r.stderr.substring(0,200)}`);
-      }
-
-      // Insert clients
-      for (const c of clients) {
-        const sql = `INSERT INTO clients (${clColsArr.join(',')}) VALUES (${clColsArr.map(k => esc(c[k])).join(',')});`;
-        const r = await exe(sql);
-        if (r.stderr && !r.stderr.includes('UNIQUE')) console.log(`🔁 client ${c.id}: ${r.stderr.substring(0,200)}`);
-      }
-
-      // Insert client_inbounds
-      for (const l of links) {
-        const sql = `INSERT INTO client_inbounds (client_id,inbound_id,flow_override,created_at) VALUES (${l.client_id},${l.inbound_id},${l.flow_override ? esc(l.flow_override) : 'NULL'},${l.created_at || 'NULL'});`;
-        await exe(sql);
-      }
-
-      await sshExec(NL, 'systemctl start x-ui');
-      console.log(`🔁 NL resync complete: ${inbounds.length} inbound'ов, ${clients.length} клиентов.`);
-    } finally {
-      NL.dispose();
     }
   } catch (err) {
-    console.error(`🔁 NL resync failed: ${err.message}`);
+    console.error(`🔁 Slave resync critical failure: ${err.message}`);
   } finally {
     syncInFlight = false;
   }
 }
 
 export function noteClientAdd(email) {
-  // fire and forget
   resyncNLInBackground(`addClient ${email}`).catch(() => {});
 }
-
 export function noteClientDelete(email) {
   resyncNLInBackground(`deleteClient ${email}`).catch(() => {});
 }

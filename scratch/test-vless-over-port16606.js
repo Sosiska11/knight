@@ -110,7 +110,7 @@ function testVlessNode(vlessUrl) {
 }
 
 // Test URL pointing to Russian Transit VPS on port 16605 (sslh)
-const testUrl = 'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@79.137.162.56:16605?type=tcp&security=reality&pbk=9GVK-0TGvL88TQn-A6fltF-7Y7mgS89vPu4JXaPjrh0&fp=chrome&sni=max.ru&sid=16179c10&flow=xtls-rprx-vision#Russian Transit sslh';
+const testUrl = 'vless://985e730a-42aa-441f-88a0-d9223e6da8b1@127.0.0.1:16605?type=tcp&security=reality&pbk=9GVK-0TGvL88TQn-A6fltF-7Y7mgS89vPu4JXaPjrh0&fp=chrome&sni=max.ru&sid=16179c10&flow=xtls-rprx-vision#Russian Transit sslh';
 
 async function run() {
   const res = await testVlessNode(testUrl);

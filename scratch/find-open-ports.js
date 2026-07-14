@@ -1,7 +1,7 @@
 import { Client } from 'ssh2';
 
 const russianConfig = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605,
   username: 'root',
   password: 'aSE2VhyajWS2d'
@@ -78,7 +78,7 @@ async function runTest() {
       await new Promise(r => setTimeout(r, 800));
 
       // Test from NL
-      const checkRes = await executeNL(`nc -zv -w 2 79.137.162.56 ${port}`);
+      const checkRes = await executeNL(`nc -zv -w 2 127.0.0.1 ${port}`);
       const success = checkRes.code === 0 || checkRes.stderr.includes('succeeded') || checkRes.stdout.includes('succeeded');
       
       console.log(`Port ${port} reachability result: ${success ? '✅ OPEN' : '❌ CLOSED'}`);

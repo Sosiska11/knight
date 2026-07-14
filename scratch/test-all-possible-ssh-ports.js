@@ -1,6 +1,6 @@
 import { Client } from 'ssh2';
 
-const host = '79.137.162.56';
+const host = '127.0.0.1';
 const password = 'aSE2VhyajWS2d';
 const ports = [80, 443, 22, 2222, 16605];
 

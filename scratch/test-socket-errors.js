@@ -36,7 +36,7 @@ conn.on('ready', async () => {
     const scannerScript = `
 const net = require('net');
 
-const host = '79.137.162.56';
+const host = '127.0.0.1';
 const testPorts = [22, 80, 443, 16605, 16606, 16607, 16608, 20000, 30000];
 
 function checkPort(port) {

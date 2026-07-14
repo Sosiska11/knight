@@ -1,7 +1,7 @@
 import { Client } from 'ssh2';
 
 const config = {
-  host: '79.137.162.56',
+  host: '127.0.0.1',
   port: 16605, // Connects to SSH currently listening on port 22 (NAT 16605 -> 22)
   username: 'root',
   password: 'aSE2VhyajWS2d'
