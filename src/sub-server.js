@@ -119,6 +119,21 @@ app.get('/sub/:uuid', async (req, res) => {
           console.error('⚠️ Failed to add dynamic Hysteria 2 nodes to subscription:', nodeErr.message);
         }
       }
+
+      // VLESS WS+TLS over Cloudflare CDN (bypass TSPU TCP blocks on DE/NL/FI)
+      // Chain: client -> CF:443 (TLS, edge cert) -> origin:80 (nginx) -> xray:127.0.0.1:10883 (VLESS WS)
+      if (config.XUI_VLESS_CDN_INBOUND_ID) {
+        const cfPath = encodeURIComponent('/kn1cf');
+        const cfNodes = [
+          { host: 'de.knight1.space', remark: '🇩🇪 Германия | CF' },
+          { host: 'nl.knight1.space', remark: '🇳🇱 Нидерланды | CF' },
+          { host: 'fi.knight1.space', remark: '🇫🇮 Финляндия | CF' },
+        ];
+        for (const n of cfNodes) {
+          const url = `vless://${sub.client_uuid}@${n.host}:443?encryption=none&security=tls&sni=${n.host}&type=ws&host=${n.host}&path=${cfPath}&fp=chrome#${encodeURIComponent(n.remark)}`;
+          configsText += url + '\n';
+        }
+      }
     }
 
 

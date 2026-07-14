@@ -24,6 +24,7 @@ const xuiInboundId = parseInt(process.env.XUI_INBOUND_ID || '1', 10);
 const xuiBypassInboundId = process.env.XUI_BYPASS_INBOUND_ID ? parseInt(process.env.XUI_BYPASS_INBOUND_ID, 10) : null;
 const xuiCdnInboundId = process.env.XUI_CDN_INBOUND_ID ? parseInt(process.env.XUI_CDN_INBOUND_ID, 10) : null;
 const xuiHy2InboundId = process.env.XUI_HY2_INBOUND_ID ? parseInt(process.env.XUI_HY2_INBOUND_ID, 10) : null;
+const xuiVlessCdnInboundId = process.env.XUI_VLESS_CDN_INBOUND_ID ? parseInt(process.env.XUI_VLESS_CDN_INBOUND_ID, 10) : null;
 const hy2Port = process.env.HY2_PORT ? parseInt(process.env.HY2_PORT, 10) : 46352;
 const useCdnBypass = process.env.USE_CDN_BYPASS === 'true';
 const cdnDomain = process.env.CDN_DOMAIN || '';
@@ -97,6 +98,7 @@ export default {
   XUI_BYPASS_INBOUND_ID: xuiBypassInboundId,
   XUI_CDN_INBOUND_ID: xuiCdnInboundId,
   XUI_HY2_INBOUND_ID: xuiHy2InboundId,
+  XUI_VLESS_CDN_INBOUND_ID: xuiVlessCdnInboundId,
   HY2_PORT: hy2Port,
   USE_CDN_BYPASS: useCdnBypass,
   CDN_DOMAIN: cdnDomain,

@@ -329,6 +329,36 @@ class XuiClient {
         }
       }
 
+      // 5. Add to VLESS CDN (Cloudflare) Inbound
+      if (config.XUI_VLESS_CDN_INBOUND_ID) {
+        const vlessCdnPayload = {
+          inboundIds: [config.XUI_VLESS_CDN_INBOUND_ID],
+          client: {
+            id: uuid,
+            flow: '',
+            email: email + '_cf',
+            limitIp: limitIp,
+            totalGB: 0,
+            expiryTime: 0,
+            enable: true,
+            tgId: 0,
+            subId: '',
+            comment: 'VLESS CDN (Cloudflare) profile'
+          }
+        };
+
+        try {
+          const vlessCdnResponse = await axios.post(url, vlessCdnPayload, { headers, timeout: 10000 });
+          if (vlessCdnResponse.data && vlessCdnResponse.data.success) {
+            console.log(`✅ Client ${email} added in 3x-ui to VLESS CDN inbound.`);
+          } else {
+            console.warn(`⚠️ Failed to add client to VLESS CDN inbound: ${vlessCdnResponse.data?.msg || 'Unknown panel error'}`);
+          }
+        } catch (err) {
+          console.error(`⚠️ Failed to add client to VLESS CDN inbound due to request error:`, err.message);
+        }
+      }
+
       // Attempt to build the Reality links automatically
       const connectionUrl = await this.buildRealityLink(inboundId, uuid, email);
       let bypassConnectionUrl = null;
@@ -368,12 +398,14 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
       let bypassUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_bp')}`;
       let cdnUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_cdn')}`;
       let hy2Url = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_hy2')}`;
-      console.log(`🗑️ Attempting to delete client ${email}, bypass, CDN and Hysteria 2 client...`);
+      let vlessCdnUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_cf')}`;
+      console.log(`🗑️ Attempting to delete client ${email}, bypass, CDN, Hysteria 2 and VLESS CDN client...`);
       
       let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
       await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
       await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
       await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
+      await axios.post(vlessCdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
 
       // If first delete method returned 200 but failed, check if client was simply not found
       if (response.status === 200 && response.data && !response.data.success) {
@@ -414,6 +446,14 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
           const hy2Url = `${this.baseUrl}/panel/api/inbounds/${config.XUI_HY2_INBOUND_ID}/delClient/${uuid}`;
           await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
             console.warn(`⚠️ Failed to delete client from Hysteria 2 inbound:`, err.message);
+          });
+        }
+
+        // If VLESS CDN (Cloudflare) inbound is configured, clean it up as well
+        if (config.XUI_VLESS_CDN_INBOUND_ID) {
+          const vlessCdnUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_VLESS_CDN_INBOUND_ID}/delClient/${uuid}`;
+          await axios.post(vlessCdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+            console.warn(`⚠️ Failed to delete client from VLESS CDN inbound:`, err.message);
           });
         }
       }

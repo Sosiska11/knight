@@ -103,7 +103,7 @@ export async function resyncNLInBackground(reason = '') {
 
     // 1. Read master list of clients bound to inbound 1 or 3
     const clColsArr = 'id,email,sub_id,uuid,password,auth,flow,security,reverse,limit_ip,total_gb,expiry_time,enable,tg_id,group_name,comment,reset,created_at,updated_at,wg_private_key,wg_public_key,wg_allowed_ips,wg_pre_shared_key,wg_keep_alive'.split(',');
-    const clientIdRows = runMasterSql('SELECT DISTINCT client_id AS id FROM client_inbounds WHERE inbound_id IN (1,3);');
+    const clientIdRows = runMasterSql('SELECT DISTINCT client_id AS id FROM client_inbounds WHERE inbound_id IN (1,3,5);');
     if (clientIdRows === null) {
       console.warn('🔁 abort: cant read master DB');
       return;
@@ -120,7 +120,7 @@ export async function resyncNLInBackground(reason = '') {
       return;
     }
 
-    const links = runMasterSql('SELECT client_id, inbound_id, flow_override, created_at FROM client_inbounds WHERE inbound_id IN (1,2,3);');
+    const links = runMasterSql('SELECT client_id, inbound_id, flow_override, created_at FROM client_inbounds WHERE inbound_id IN (1,2,3,5);');
     if (links === null) {
       console.warn('🔁 abort: cant read master client_inbounds');
       return;
@@ -136,11 +136,11 @@ export async function resyncNLInBackground(reason = '') {
         console.log(`  ➔ Syncing to node: ${node.name} (${node.host()})...`);
         ssh = await connectNode(node);
 
-        // Verify node has inbounds 1, 2, 3
-        const checkCmd = `sqlite3 ${dbPath} "PRAGMA busy_timeout = 2000; SELECT count(*) AS n FROM inbounds WHERE id IN (1,2,3);"`;
+        // Verify node has inbounds 1, 2, 3, 5
+        const checkCmd = `sqlite3 ${dbPath} "PRAGMA busy_timeout = 2000; SELECT count(*) AS n FROM inbounds WHERE id IN (1,2,3,5);"`;
         const inbCheck = await ssh.execCommand(checkCmd).then(r => parseInt((r.stdout || '0').trim(), 10));
-        if (isNaN(inbCheck) || inbCheck < 3) {
-          console.warn(`  🔁 Node ${node.name} has only ${inbCheck} of 3 expected inbounds — aborting sync for this node.`);
+        if (isNaN(inbCheck) || inbCheck < 4) {
+          console.warn(`  🔁 Node ${node.name} has only ${inbCheck} of 4 expected inbounds — aborting sync for this node.`);
           continue;
         }
 
@@ -163,7 +163,7 @@ export async function resyncNLInBackground(reason = '') {
         }
 
         // Rebuild client_inbounds relationships
-        sqlStatements.push('DELETE FROM client_inbounds WHERE inbound_id IN (1,2,3);');
+        sqlStatements.push('DELETE FROM client_inbounds WHERE inbound_id IN (1,2,3,5);');
         for (const l of links) {
           sqlStatements.push(`INSERT INTO client_inbounds (client_id,inbound_id,flow_override,created_at) VALUES (${l.client_id},${l.inbound_id},${l.flow_override ? esc(l.flow_override) : 'NULL'},${l.created_at || 'NULL'});`);
         }
