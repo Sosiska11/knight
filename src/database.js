@@ -133,6 +133,33 @@ export async function initDb() {
   } catch (err) {
     // Ignore error if column already exists
   }
+
+  // Migration: Add referred_by column to users if it doesn't exist (for existing databases)
+  try {
+    await dbRun(`ALTER TABLE users ADD COLUMN referred_by INTEGER`);
+    console.log('📝 Added referred_by column to users table (migration).');
+  } catch (err) {
+    // Ignore error if column already exists
+  }
+
+  // Support tables creation
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS support_sessions (
+      tg_id INTEGER PRIMARY KEY,
+      active INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS support_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      admin_message_id INTEGER UNIQUE,
+      user_id INTEGER,
+      user_message_id INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
   
   console.log('✅ Database tables initialized successfully.');
 }
@@ -142,12 +169,19 @@ export async function getUser(tgId) {
   return await dbGet('SELECT * FROM users WHERE tg_id = ?', [tgId]);
 }
 
-export async function createUser(tgId, username, firstName) {
+export async function createUser(tgId, username, firstName, referredBy = null) {
   try {
-    await dbRun(
-      'INSERT OR IGNORE INTO users (tg_id, username, first_name) VALUES (?, ?, ?)',
-      [tgId, username, firstName]
-    );
+    if (referredBy) {
+      await dbRun(
+        'INSERT OR IGNORE INTO users (tg_id, username, first_name, referred_by) VALUES (?, ?, ?, ?)',
+        [tgId, username, firstName, referredBy]
+      );
+    } else {
+      await dbRun(
+        'INSERT OR IGNORE INTO users (tg_id, username, first_name) VALUES (?, ?, ?)',
+        [tgId, username, firstName]
+      );
+    }
     // In case username or first_name changed, update them
     await dbRun(
       'UPDATE users SET username = ?, first_name = ? WHERE tg_id = ?',
@@ -340,6 +374,20 @@ export async function forceExtendUser(tgId, days) {
   }
 }
 
+export async function getReferralStats(tgId) {
+  const stats = await dbGet(
+    `SELECT COUNT(*) as total_referred, 
+            SUM(CASE WHEN trial_used = 1 THEN 1 ELSE 0 END) as active_referred 
+     FROM users 
+     WHERE referred_by = ?`,
+    [tgId]
+  );
+  return {
+    totalReferred: stats?.total_referred || 0,
+    activeReferred: stats?.active_referred || 0,
+  };
+}
+
 // GeoIP Cache helpers
 export async function getGeoCache(ip) {
   return await dbGet('SELECT * FROM geoip_cache WHERE ip = ?', [ip]);
@@ -355,4 +403,47 @@ export async function setGeoCache(ip, country, org) {
     console.error('Error in setGeoCache:', error);
   }
 }
+
+// Support helper methods
+export async function setSupportMode(tgId, active) {
+  try {
+    await dbRun(
+      'INSERT OR REPLACE INTO support_sessions (tg_id, active) VALUES (?, ?)',
+      [tgId, active ? 1 : 0]
+    );
+  } catch (error) {
+    console.error('Error in setSupportMode:', error);
+  }
+}
+
+export async function isSupportMode(tgId) {
+  try {
+    const row = await dbGet('SELECT active FROM support_sessions WHERE tg_id = ?', [tgId]);
+    return row ? row.active === 1 : false;
+  } catch (error) {
+    console.error('Error in isSupportMode:', error);
+    return false;
+  }
+}
+
+export async function createSupportMessageMapping(adminMsgId, userId, userMsgId) {
+  try {
+    await dbRun(
+      'INSERT OR REPLACE INTO support_messages (admin_message_id, user_id, user_message_id) VALUES (?, ?, ?)',
+      [adminMsgId, userId, userMsgId]
+    );
+  } catch (error) {
+    console.error('Error in createSupportMessageMapping:', error);
+  }
+}
+
+export async function getSupportMessageMapping(adminMsgId) {
+  try {
+    return await dbGet('SELECT * FROM support_messages WHERE admin_message_id = ?', [adminMsgId]);
+  } catch (error) {
+    console.error('Error in getSupportMessageMapping:', error);
+    return null;
+  }
+}
+
 

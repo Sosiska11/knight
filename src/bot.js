@@ -27,10 +27,167 @@ bot.use(async (ctx, next) => {
 // Middleware to register/update user in DB on every message
 bot.use(async (ctx, next) => {
   if (ctx.from) {
-    await db.createUser(ctx.from.id, ctx.from.username || '', ctx.from.first_name || '');
+    const tgId = ctx.from.id;
+    const existingUser = await db.getUser(tgId);
+
+    if (!existingUser) {
+      let referredBy = null;
+      if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/start')) {
+        const parts = ctx.message.text.split(' ');
+        if (parts.length > 1) {
+          const payload = parts[1];
+          const referrerId = parseInt(payload.replace('ref_', ''), 10);
+          if (!isNaN(referrerId) && referrerId !== tgId) {
+            referredBy = referrerId;
+          }
+        }
+      }
+
+      await db.createUser(tgId, ctx.from.username || '', ctx.from.first_name || '', referredBy);
+
+      if (referredBy) {
+        console.log(`User ${tgId} was referred by ${referredBy}`);
+        try {
+          await ctx.telegram.sendMessage(
+            referredBy,
+            `👤 Новый пользователь зарегистрировался по вашей реферальной ссылке!\nВы получите <b>+3 дня</b> к подписке, когда он активирует пробный период.`,
+            { parse_mode: 'HTML' }
+          );
+        } catch (e) {
+          console.error(`Failed to notify referrer ${referredBy}:`, e.message);
+        }
+      }
+    } else {
+      await db.createUser(tgId, ctx.from.username || '', ctx.from.first_name || '');
+    }
   }
   return next();
 });
+
+// Helper to handle messages sent by users in support mode
+async function handleSupportMessage(ctx) {
+  const tgId = ctx.from.id;
+  const username = ctx.from.username;
+  const firstName = ctx.from.first_name || 'Пользователь';
+  
+  const supportChatId = config.SUPPORT_CHAT_ID || (config.ADMIN_TG_IDS.length > 0 ? config.ADMIN_TG_IDS[0] : null);
+  
+  if (!supportChatId) {
+    console.error('❌ Support chat ID and Admin TG IDs are not configured. Cannot forward support message.');
+    await ctx.reply('⚠️ К сожалению, служба поддержки сейчас недоступна. Пожалуйста, обратитесь к @knightvpn_help позже.');
+    return;
+  }
+  
+  try {
+    // 1. Send the ticket header info message
+    const userLink = username ? `@${username}` : `<a href="tg://user?id=${tgId}">${firstName}</a>`;
+    const headerText = `🎫 <b>Новое обращение в поддержку</b>\n` +
+      `👤 От: ${userLink} (ID: <code>${tgId}</code>)`;
+      
+    const headerMsg = await ctx.telegram.sendMessage(supportChatId, headerText, { parse_mode: 'HTML' });
+    
+    // 2. Copy the actual user's message as a reply to the header
+    const copiedMsg = await ctx.telegram.copyMessage(
+      supportChatId,
+      ctx.chat.id,
+      ctx.message.message_id,
+      {
+        reply_to_message_id: headerMsg.message_id
+      }
+    );
+    
+    // 3. Save the mappings in database for BOTH messages
+    await db.createSupportMessageMapping(headerMsg.message_id, tgId, ctx.message.message_id);
+    await db.createSupportMessageMapping(copiedMsg.message_id, tgId, ctx.message.message_id);
+    
+    // 4. Acknowledge to the user
+    const userAckKeyboard = {
+      inline_keyboard: [[{ text: '❌ Выйти из поддержки', callback_data: 'exit_support' }]]
+    };
+    await ctx.reply(
+      `✉️ <b>Ваше сообщение отправлено поддержке.</b>\n` +
+      `Ожидайте ответа прямо в этом чате. Вы можете отправить дополнительные файлы/сообщения или выйти из поддержки, нажав кнопку ниже.`,
+      { parse_mode: 'HTML', reply_markup: userAckKeyboard }
+    );
+  } catch (error) {
+    console.error('Error forwarding support message:', error);
+    await ctx.reply('❌ Произошла ошибка при отправке сообщения. Пожалуйста, попробуйте еще раз.');
+  }
+}
+
+// Helper to handle admin replies in support chat
+async function handleSupportReply(ctx) {
+  const repliedMsgId = ctx.message.reply_to_message.message_id;
+  const mapping = await db.getSupportMessageMapping(repliedMsgId);
+  
+  if (!mapping) {
+    return;
+  }
+  
+  const userId = mapping.user_id;
+  
+  try {
+    const keyboard = {
+      inline_keyboard: [[{ text: '✍️ Написать ответ', callback_data: 'ask_support' }]]
+    };
+    await ctx.telegram.sendMessage(userId, `✉️ <b>Ответ службы поддержки:</b>`, { 
+      parse_mode: 'HTML',
+      reply_markup: keyboard
+    });
+    
+    await ctx.telegram.copyMessage(userId, ctx.chat.id, ctx.message.message_id);
+    
+    const status = await ctx.reply(`✅ Ответ успешно отправлен пользователю.`);
+    setTimeout(() => {
+      ctx.telegram.deleteMessage(ctx.chat.id, status.message_id).catch(() => {});
+    }, 5000);
+  } catch (error) {
+    console.error(`Failed to send reply to user ${userId}:`, error);
+    await ctx.reply(`❌ Не удалось отправить ответ пользователю. Возможно, он заблокировал бота.`);
+  }
+}
+
+// Middleware to clear support mode when navigating away via callback queries
+bot.use(async (ctx, next) => {
+  if (ctx.callbackQuery && ctx.callbackQuery.data !== 'ask_support') {
+    const tgId = ctx.from.id;
+    if (await db.isSupportMode(tgId)) {
+      await db.setSupportMode(tgId, 0);
+    }
+  }
+  return next();
+});
+
+// Middleware to route support messages and support replies
+bot.use(async (ctx, next) => {
+  if (ctx.message) {
+    const tgId = ctx.from.id;
+    
+    // Check if user is in support mode
+    const isSupport = await db.isSupportMode(tgId);
+    if (isSupport) {
+      // If it's a command, exit support mode and continue
+      if (ctx.message.text && ctx.message.text.startsWith('/')) {
+        await db.setSupportMode(tgId, 0);
+        return next();
+      }
+      await handleSupportMessage(ctx);
+      return;
+    }
+    
+    // Check if it's a reply in the support chat
+    const supportChatId = config.SUPPORT_CHAT_ID || (config.ADMIN_TG_IDS.length > 0 ? config.ADMIN_TG_IDS[0] : null);
+    if (supportChatId && ctx.chat.id === supportChatId && ctx.message.reply_to_message) {
+      if (ctx.message.text && ctx.message.text.startsWith('/')) {
+        return next();
+      }
+      await handleSupportReply(ctx);
+      return;
+    }
+  }
+  return next();
+});
+
 
 // Helper to check admin access
 function isAdmin(tgId) {
@@ -113,6 +270,7 @@ bot.start(async (ctx) => {
     await ctx.deleteMessage(msg.message_id).catch(() => {});
   } catch (e) {}
   
+  await db.setSupportMode(ctx.from.id, 0);
   await sendMainMenu(ctx);
 });
 
@@ -167,6 +325,9 @@ async function showProfile(ctx) {
     
     buttons.push([{ text: '💳 Купить подписку', callback_data: 'show_buy_menu' }]);
   }
+  
+  // Add Referral Program button to all users
+  buttons.push([{ text: '👥 Реферальная программа', callback_data: 'show_referral' }]);
   
   buttons.push([{ text: '🔙 Главное меню', callback_data: 'back_to_main' }]);
 
@@ -316,12 +477,15 @@ async function showInstructions(ctx) {
 // Show Support Info
 async function showSupport(ctx) {
   const supportText = `🆘 <b>Служба поддержки Knight VPN</b>\n\n` +
-    `Если у вас возникли вопросы по оплате, настройке или работе VPN — напишите администратору:\n\n` +
-    `👨‍💻 <b>Контакты администратора:</b> @knightvpn_help\n\n` +
-    `Опишите вашу проблему, указав ваш ID: <code>${ctx.from.id}</code>`;
+    `Здесь вы можете задать любой вопрос нашей службе поддержки.\n\n` +
+    `Нажмите кнопку <b>«✍️ Написать вопрос»</b> ниже, а затем отправьте ваше сообщение (текст, фото/скриншот или голосовое).\n\n` +
+    `Наш менеджер ответит вам в этом чате в ближайшее время!`;
 
   const keyboard = {
-    inline_keyboard: [[{ text: '🔙 Главное меню', callback_data: 'back_to_main' }]]
+    inline_keyboard: [
+      [{ text: '✍️ Написать вопрос', callback_data: 'ask_support' }],
+      [{ text: '🔙 Главное меню', callback_data: 'back_to_main' }]
+    ]
   };
 
   await sendOrEditMessage(ctx, supportText, keyboard);
@@ -369,9 +533,65 @@ bot.action('show_support', async (ctx) => {
   await showSupport(ctx);
 });
 
+bot.action('ask_support', async (ctx) => {
+  await ctx.answerCbQuery();
+  const tgId = ctx.from.id;
+  await db.setSupportMode(tgId, 1);
+  
+  const text = `✍️ <b>Режим поддержки активирован!</b>\n\n` +
+    `Напишите ваш вопрос или отправьте скриншот/файл. Вы можете отправить несколько сообщений подряд.\n\n` +
+    `Для завершения диалога или возврата назад нажмите кнопку ниже:`;
+    
+  const keyboard = {
+    inline_keyboard: [[{ text: '❌ Выйти из поддержки', callback_data: 'exit_support' }]]
+  };
+  
+  await sendOrEditMessage(ctx, text, keyboard);
+});
+
+bot.action('exit_support', async (ctx) => {
+  await ctx.answerCbQuery('Вы вышли из поддержки');
+  const tgId = ctx.from.id;
+  await db.setSupportMode(tgId, 0);
+  await sendMainMenu(ctx);
+});
+
 bot.action('show_admin_panel', async (ctx) => {
   await ctx.answerCbQuery();
   await showAdminPanel(ctx);
+});
+
+bot.action('show_referral', async (ctx) => {
+  await ctx.answerCbQuery();
+  const tgId = ctx.from.id;
+  const botUsername = ctx.botInfo?.username || 'KnightVPN_bot';
+  const refLink = `https://t.me/${botUsername}?start=ref_${tgId}`;
+
+  const stats = await db.getReferralStats(tgId);
+  const totalDays = stats.activeReferred * 3;
+
+  const text = `👥 <b>Реферальная программа</b>\n\n` +
+    `Приглашайте друзей и получайте бонусные дни подписки!\n` +
+    `Когда кто-то переходит по вашей ссылке и активирует <b>пробный период</b>, вы получаете <b>+3 дня</b> к своей подписке.\n\n` +
+    `🔗 <b>Ваша реферальная ссылка:</b>\n` +
+    `<code>${refLink}</code>\n\n` +
+    `📊 <b>Ваша статистика:</b>\n` +
+    `• Перешли по ссылке: <code>${stats.totalReferred}</code>\n` +
+    `• Активировали тест: <code>${stats.activeReferred}</code>\n` +
+    `• Бонусных дней получено: <code>${totalDays} дн.</code>\n\n` +
+    `<i>Нажмите на ссылку выше, чтобы скопировать её и отправить друзьям.</i>`;
+
+  const shareText = `Привет! Попробуй Knight VPN — быстрый и безопасный VPN-сервис для обхода любых блокировок. Дают 3 дня бесплатного теста по моей ссылке! 🎁`;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: '✉️ Поделиться ссылкой', url: shareUrl }],
+      [{ text: '🔙 Назад в профиль', callback_data: 'show_profile' }]
+    ]
+  };
+
+  await sendOrEditMessage(ctx, text, keyboard);
 });
 
 bot.action('back_to_main', async (ctx) => {
@@ -414,7 +634,67 @@ bot.action('get_key', async (ctx) => {
   await sendOrEditMessage(ctx, keyText, keyboard);
 });
 
+async function awardReferralBonus(ctx, referrerId) {
+  try {
+    const activeSub = await db.getActiveSubscription(referrerId);
+    let expiresAt;
 
+    if (activeSub) {
+      const updatedSub = await db.extendSubscription(referrerId, 3);
+      expiresAt = updatedSub.expires_at;
+
+      const devices = activeSub.limit_ip || 1;
+      const client = await xuiApi.addClient(activeSub.client_email, activeSub.client_uuid, devices);
+      if (client.connectionUrl) {
+        await db.updateSubscriptionUrls(referrerId, client.connectionUrl, client.bypassConnectionUrl);
+      }
+    } else {
+      const email = `vpn_user_${referrerId}`;
+      let uuid = crypto.randomUUID();
+
+      const expiredSub = await db.getSubscriptionByEmail(email);
+      if (expiredSub) {
+        uuid = expiredSub.client_uuid;
+      }
+
+      const client = await xuiApi.addClient(email, uuid, 1);
+      if (client.error && !xuiApi.mockMode) {
+        console.error('3x-ui API Error during referral subscription creation:', client.error);
+      }
+
+      const newSub = await db.createSubscription(
+        referrerId,
+        client.email,
+        client.uuid,
+        client.connectionUrl,
+        'Referral Bonus',
+        3,
+        1,
+        client.bypassConnectionUrl
+      );
+      expiresAt = newSub.expires_at;
+    }
+
+    const expiryStr = new Date(expiresAt.replace(' ', 'T') + 'Z').toLocaleString('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    await ctx.telegram.sendMessage(
+      referrerId,
+      `🎁 <b>Бонус за приглашение!</b>\n\nПользователь, зарегистрировавшийся по вашей ссылке, активировал тест.\nВам начислено <b>+3 дня</b> подписки.\n\nПодписка активна до (МСК): <code>${expiryStr}</code>`,
+      { parse_mode: 'HTML' }
+    ).catch(err => {
+      console.warn(`Could not notify referrer ${referrerId} about bonus:`, err.message);
+    });
+  } catch (error) {
+    console.error(`Error awarding referral bonus to ${referrerId}:`, error);
+  }
+}
 
 bot.action('activate_trial', async (ctx) => {
   const tgId = ctx.from.id;
@@ -448,6 +728,10 @@ bot.action('activate_trial', async (ctx) => {
     );
 
     await db.markTrialUsed(tgId);
+
+    if (user && user.referred_by) {
+      await awardReferralBonus(ctx, user.referred_by);
+    }
 
     const keyText = `🎉 <b>Пробный доступ успешно активирован!</b>
 

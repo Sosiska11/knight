@@ -17,6 +17,11 @@ const adminTgIds = (process.env.ADMIN_TG_IDS || '')
 
 const yookassaToken = process.env.YOOKASSA_TOKEN;
 
+const supportChatId = process.env.SUPPORT_CHAT_ID && !isNaN(parseInt(process.env.SUPPORT_CHAT_ID.trim(), 10))
+  ? parseInt(process.env.SUPPORT_CHAT_ID.trim(), 10)
+  : null;
+
+
 const xuiUrl = process.env.XUI_URL;
 const xuiUsername = process.env.XUI_USERNAME;
 const xuiPassword = process.env.XUI_PASSWORD;
@@ -91,6 +96,7 @@ export default {
   BOT_TOKEN: botToken,
   ADMIN_TG_IDS: adminTgIds,
   YOOKASSA_TOKEN: yookassaToken,
+  SUPPORT_CHAT_ID: supportChatId,
   XUI_URL: xuiUrl,
   XUI_USERNAME: xuiUsername,
   XUI_PASSWORD: xuiPassword,

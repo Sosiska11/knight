@@ -784,8 +784,7 @@ app.get('/import/:uuid?', async (req, res) => {
                     step1_desc: 'Установите официальное приложение <b>Happ Utility</b> из App Store по кнопке ниже:',
                     btn_download_text: '🍏 Скачать Happ из App Store (Global)',
                     btn_download_url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215',
-                    btn_download_text2: '🍏 Скачать Happ Plus (РФ регион)',
-                    btn_download_url2: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973',
+                    rf_notice: '⚠️ В российском регионе App Store приложение <b>Happ Plus</b> в данный момент скачать нельзя. Пожалуйста, воспользуйтесь приложением <b>iNCY</b>.',
                     import_fn: 'importHapp'
                 },
                 {
@@ -862,8 +861,7 @@ app.get('/import/:uuid?', async (req, res) => {
                     step1_desc: 'Установите официальное приложение из App Store для macOS:',
                     btn_download_text: '🍏 Скачать Happ из App Store (Global)',
                     btn_download_url: 'https://apps.apple.com/us/app/happ-proxy-utility/id6504287215',
-                    btn_download_text2: '🍏 Скачать Happ Plus (РФ регион)',
-                    btn_download_url2: 'https://apps.apple.com/ru/app/happ-proxy-utility-plus/id6746188973',
+                    rf_notice: '⚠️ В российском регионе App Store приложение <b>Happ Plus</b> в данный момент скачать нельзя. Пожалуйста, воспользуйтесь приложением <b>iNCY</b>.',
                     import_fn: 'importHapp'
                 },
                 {
@@ -955,6 +953,9 @@ app.get('/import/:uuid?', async (req, res) => {
                     '<a href="' + app.btn_download_url + '" onclick="openExternalUrl(this.href); return false;" class="btn-action">' + app.btn_download_text + '</a>';
             if (app.btn_download_url2) {
                 step1Html += '<a href="' + app.btn_download_url2 + '" onclick="openExternalUrl(this.href); return false;" class="btn-action-outline">' + app.btn_download_text2 + '</a>';
+            }
+            if (app.rf_notice) {
+                step1Html += '<div class="error-box">' + app.rf_notice + '</div>';
             }
             step1Html += '</div>';
 
