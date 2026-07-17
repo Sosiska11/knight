@@ -848,10 +848,19 @@ export async function checkNodesHealth() {
 
     // Get the port of inbound 1
     const inbound = await xuiApi.getInbound(config.XUI_INBOUND_ID);
-    const port = inbound ? inbound.port : 443;
+    const defaultPort = inbound ? inbound.port : 443;
 
     for (const node of nodes) {
       if (!node.address) continue;
+
+      // Determine correct port to check (use 443 for known slaves/addresses where default port is not accessible)
+      let port = defaultPort;
+      const isSlave = node.address === '194.50.94.46' || node.address === process.env.NL_SSH_HOST ||
+                      node.address === '31.76.46.20' || node.address === process.env.FI_SSH_HOST ||
+                      node.address === '188.255.163.236' || node.address === process.env.PL_SSH_HOST;
+      if (isSlave) {
+        port = 443;
+      }
 
       const isOnline = await pingTcp(node.address, port);
       const wasOffline = xuiApi.isNodeOffline(node.address);

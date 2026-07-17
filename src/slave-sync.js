@@ -101,9 +101,9 @@ export async function resyncNLInBackground(reason = '') {
   try {
     console.log(`🔁 Resync to slave VPS nodes started (${reason})…`);
 
-    // 1. Read master list of clients bound to inbound 1 or 3
+    // 1. Read master list of clients bound to expected inbounds 1, 2, 3 or 5
     const clColsArr = 'id,email,sub_id,uuid,password,auth,flow,security,reverse,limit_ip,total_gb,expiry_time,enable,tg_id,group_name,comment,reset,created_at,updated_at,wg_private_key,wg_public_key,wg_allowed_ips,wg_pre_shared_key,wg_keep_alive'.split(',');
-    const clientIdRows = runMasterSql('SELECT DISTINCT client_id AS id FROM client_inbounds WHERE inbound_id IN (1,3,5);');
+    const clientIdRows = runMasterSql('SELECT DISTINCT client_id AS id FROM client_inbounds WHERE inbound_id IN (1,2,3,5);');
     if (clientIdRows === null) {
       console.warn('🔁 abort: cant read master DB');
       return;
@@ -136,13 +136,38 @@ export async function resyncNLInBackground(reason = '') {
         console.log(`  ➔ Syncing to node: ${node.name} (${node.host()})...`);
         ssh = await connectNode(node);
 
-        // Verify node has inbounds 1, 2, 3, 5
-        const checkCmd = `sqlite3 ${dbPath} "PRAGMA busy_timeout = 2000; SELECT count(*) AS n FROM inbounds WHERE id IN (1,2,3,5);"`;
-        const inbCheck = await ssh.execCommand(checkCmd).then(r => parseInt((r.stdout || '0').trim(), 10));
-        if (isNaN(inbCheck) || inbCheck < 4) {
-          console.warn(`  🔁 Node ${node.name} has only ${inbCheck} of 4 expected inbounds — aborting sync for this node.`);
+        // Verify which of the expected inbounds exist on this node and check if they use TCP Reality
+        const checkCmd = `sqlite3 ${dbPath} "PRAGMA busy_timeout = 2000; SELECT id, protocol, stream_settings FROM inbounds WHERE id IN (1,2,3,5);"`;
+        const checkRes = await ssh.execCommand(checkCmd);
+        
+        const existingInboundIds = [];
+        const realityInboundIds = new Set();
+        
+        const lines = (checkRes.stdout || '').split('\n').filter(Boolean);
+        for (const line of lines) {
+          const parts = line.split('|');
+          const id = parseInt(parts[0].trim(), 10);
+          if (isNaN(id)) continue;
+          existingInboundIds.push(id);
+          
+          const protocol = parts[1]?.trim();
+          const streamSettingsRaw = parts[2]?.trim();
+          if (protocol === 'vless' && streamSettingsRaw) {
+            try {
+              const streamSettings = JSON.parse(streamSettingsRaw);
+              if (streamSettings.security === 'reality' && streamSettings.network === 'tcp') {
+                realityInboundIds.add(id);
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (existingInboundIds.length === 0) {
+          console.warn(`  橫 Node ${node.name} has no matching expected inbounds 誘 aborting sync for this node.`);
           continue;
         }
+
+        console.log(`  ℹ️ Node ${node.name} has active inbounds: ${existingInboundIds.join(', ')} (Reality TCP: ${[...realityInboundIds].join(', ') || 'none'})`);
 
         // Stop x-ui briefly to write safely
         await ssh.execCommand('systemctl stop x-ui || true');
@@ -156,21 +181,29 @@ export async function resyncNLInBackground(reason = '') {
         sqlStatements.push('PRAGMA busy_timeout = 5000;');
         sqlStatements.push('BEGIN TRANSACTION;');
 
+        // Delete orphans first to avoid UNIQUE constraint violations on email (since orphaned client records might contain emails of updated/active clients with new IDs)
+        const masterIdList = clientIdset.join(',');
+        sqlStatements.push(`DELETE FROM clients WHERE id NOT IN (${masterIdList});`);
+
         // Delete existing and insert fresh clients
         for (const c of clients) {
-          sqlStatements.push(`DELETE FROM clients WHERE id=${c.id};`);
+          sqlStatements.push(`DELETE FROM clients WHERE id=${c.id} OR email=${esc(c.email)};`);
           sqlStatements.push(`INSERT INTO clients (${clColsArr.join(',')}) VALUES (${clColsArr.map(k => esc(c[k])).join(',')});`);
         }
 
-        // Rebuild client_inbounds relationships
-        sqlStatements.push('DELETE FROM client_inbounds WHERE inbound_id IN (1,2,3,5);');
+        // Rebuild client_inbounds relationships for existing inbounds only
+        const existingInboundsStr = existingInboundIds.join(',');
+        sqlStatements.push(`DELETE FROM client_inbounds WHERE inbound_id IN (${existingInboundsStr});`);
         for (const l of links) {
-          sqlStatements.push(`INSERT INTO client_inbounds (client_id,inbound_id,flow_override,created_at) VALUES (${l.client_id},${l.inbound_id},${l.flow_override ? esc(l.flow_override) : 'NULL'},${l.created_at || 'NULL'});`);
+          if (existingInboundIds.includes(l.inbound_id)) {
+            let flowOverride = l.flow_override ? esc(l.flow_override) : 'NULL';
+            // Force xtls-rprx-vision for client connections using TCP Reality on the slave node
+            if (realityInboundIds.has(l.inbound_id)) {
+              flowOverride = esc('xtls-rprx-vision');
+            }
+            sqlStatements.push(`INSERT INTO client_inbounds (client_id,inbound_id,flow_override,created_at) VALUES (${l.client_id},${l.inbound_id},${flowOverride},${l.created_at || 'NULL'});`);
+          }
         }
-
-        // Delete orphans
-        const masterIdList = clientIdset.join(',');
-        sqlStatements.push(`DELETE FROM clients WHERE id NOT IN (${masterIdList});`);
 
         sqlStatements.push('COMMIT;');
 

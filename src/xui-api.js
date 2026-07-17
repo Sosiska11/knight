@@ -1,8 +1,18 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import { exec } from 'child_process';
+import https from 'https';
 import config from './config.js';
 import * as slaveSync from './slave-sync.js';
+
+// Dedicated HTTPS agent for 3x-ui panel requests. TLS verification is enabled
+// by default and can be disabled per-connection by setting XUI_TLS_SKIP_VERIFY=true
+// in the environment (e.g. for panels with self-signed certificates).
+// All other outbound HTTPS requests (Telegram, payments, geoip, etc.) keep
+// the default Node.js verification.
+const xuiHttpsAgent = new https.Agent({
+  rejectUnauthorized: !config.XUI_TLS_SKIP_VERIFY
+});
 
 function getBypassUuid(mainUuid) {
   const hash = crypto.createHash('sha256').update(mainUuid).digest('hex');
@@ -47,7 +57,8 @@ class XuiClient {
       // 1. GET request to the root page to obtain initial session cookie and CSRF token
       const getResponse = await axios.get(`${this.baseUrl}/`, {
         timeout: 15000,
-        validateStatus: () => true
+        validateStatus: () => true,
+        httpsAgent: xuiHttpsAgent
       });
 
       if (getResponse.status !== 200) {
@@ -81,7 +92,8 @@ class XuiClient {
             'X-Requested-With': 'XMLHttpRequest'
           },
           timeout: 10000,
-          validateStatus: () => true
+          validateStatus: () => true,
+          httpsAgent: xuiHttpsAgent
         }
       );
 
@@ -109,7 +121,8 @@ class XuiClient {
           'X-Requested-With': 'XMLHttpRequest'
         },
         timeout: 10000,
-        validateStatus: () => true
+        validateStatus: () => true,
+        httpsAgent: xuiHttpsAgent
       });
 
       if (urlencodedResponse.status === 200 && urlencodedResponse.data?.success) {
@@ -156,7 +169,7 @@ class XuiClient {
       const headers = await this.getHeaders();
       if (this.mockMode) return null;
       const url = `${this.baseUrl}/panel/api/inbounds/get/${inboundId}`;
-      const response = await axios.get(url, { headers, timeout: 5000 });
+      const response = await axios.get(url, { headers, timeout: 5000, httpsAgent: xuiHttpsAgent });
 
       if (response.data && response.data.success) {
         return response.data.obj;
@@ -212,7 +225,7 @@ class XuiClient {
       };
 
       const url = `${this.baseUrl}/panel/api/clients/add`;
-      const response = await axios.post(url, mainPayload, { headers, timeout: 10000 });
+      const response = await axios.post(url, mainPayload, { headers, timeout: 10000, httpsAgent: xuiHttpsAgent });
 
       if (!response.data || !response.data.success) {
         throw new Error(`Main inbound error: ${response.data?.msg || 'Unknown error'}`);
@@ -255,7 +268,7 @@ class XuiClient {
         };
 
         try {
-          const bypassResponse = await axios.post(url, bypassPayload, { headers, timeout: 10000 });
+          const bypassResponse = await axios.post(url, bypassPayload, { headers, timeout: 10000, httpsAgent: xuiHttpsAgent });
           if (bypassResponse.data && bypassResponse.data.success) {
             console.log(`✅ Client ${email} added in 3x-ui to bypass inbound.`);
             addedBypass = true;
@@ -286,7 +299,7 @@ class XuiClient {
         };
 
         try {
-          const cdnResponse = await axios.post(url, cdnPayload, { headers, timeout: 10000 });
+          const cdnResponse = await axios.post(url, cdnPayload, { headers, timeout: 10000, httpsAgent: xuiHttpsAgent });
           if (cdnResponse.data && cdnResponse.data.success) {
             console.log(`✅ Client ${email} added in 3x-ui to CDN inbound.`);
             addedBypass = true; // Mark as added to at least one bypass inbound
@@ -318,7 +331,7 @@ class XuiClient {
         };
 
         try {
-          const hy2Response = await axios.post(url, hy2Payload, { headers, timeout: 10000 });
+          const hy2Response = await axios.post(url, hy2Payload, { headers, timeout: 10000, httpsAgent: xuiHttpsAgent });
           if (hy2Response.data && hy2Response.data.success) {
             console.log(`✅ Client ${email} added in 3x-ui to Hysteria 2 inbound.`);
           } else {
@@ -348,7 +361,7 @@ class XuiClient {
         };
 
         try {
-          const vlessCdnResponse = await axios.post(url, vlessCdnPayload, { headers, timeout: 10000 });
+          const vlessCdnResponse = await axios.post(url, vlessCdnPayload, { headers, timeout: 10000, httpsAgent: xuiHttpsAgent });
           if (vlessCdnResponse.data && vlessCdnResponse.data.success) {
             console.log(`✅ Client ${email} added in 3x-ui to VLESS CDN inbound.`);
           } else {
@@ -401,11 +414,11 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
       let vlessCdnUrl = `${this.baseUrl}/panel/api/clients/del/${encodeURIComponent(email + '_cf')}`;
       console.log(`🗑️ Attempting to delete client ${email}, bypass, CDN, Hysteria 2 and VLESS CDN client...`);
       
-      let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
-      await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
-      await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
-      await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
-      await axios.post(vlessCdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(() => null);
+      let response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent });
+      await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(() => null);
+      await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(() => null);
+      await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(() => null);
+      await axios.post(vlessCdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(() => null);
 
       // If first delete method returned 200 but failed, check if client was simply not found
       if (response.status === 200 && response.data && !response.data.success) {
@@ -421,13 +434,13 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
         console.warn(`⚠️ First delete method failed (${response.status}). Trying alternative...`);
         const inboundId = config.XUI_INBOUND_ID;
         url = `${this.baseUrl}/panel/api/inbounds/${inboundId}/delClient/${uuid}`;
-        response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true });
+        response = await axios.post(url, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent });
 
         // If bypass inbound is configured, clean it up as well
         if (config.XUI_BYPASS_INBOUND_ID) {
           const bypassUuid = getBypassUuid(uuid);
           const bypassUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_BYPASS_INBOUND_ID}/delClient/${bypassUuid}`;
-          await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+          await axios.post(bypassUrl, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(err => {
             console.warn(`⚠️ Failed to delete client from bypass inbound:`, err.message);
           });
         }
@@ -436,7 +449,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
         if (config.XUI_CDN_INBOUND_ID) {
           const bypassUuid = getBypassUuid(uuid);
           const cdnUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_CDN_INBOUND_ID}/delClient/${bypassUuid}`;
-          await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+          await axios.post(cdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(err => {
             console.warn(`⚠️ Failed to delete client from CDN inbound:`, err.message);
           });
         }
@@ -444,7 +457,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
         // If Hysteria 2 inbound is configured, clean it up as well
         if (config.XUI_HY2_INBOUND_ID) {
           const hy2Url = `${this.baseUrl}/panel/api/inbounds/${config.XUI_HY2_INBOUND_ID}/delClient/${uuid}`;
-          await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+          await axios.post(hy2Url, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(err => {
             console.warn(`⚠️ Failed to delete client from Hysteria 2 inbound:`, err.message);
           });
         }
@@ -452,7 +465,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
         // If VLESS CDN (Cloudflare) inbound is configured, clean it up as well
         if (config.XUI_VLESS_CDN_INBOUND_ID) {
           const vlessCdnUrl = `${this.baseUrl}/panel/api/inbounds/${config.XUI_VLESS_CDN_INBOUND_ID}/delClient/${uuid}`;
-          await axios.post(vlessCdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true }).catch(err => {
+          await axios.post(vlessCdnUrl, {}, { headers, timeout: 5000, validateStatus: () => true, httpsAgent: xuiHttpsAgent }).catch(err => {
             console.warn(`⚠️ Failed to delete client from VLESS CDN inbound:`, err.message);
           });
         }
@@ -619,36 +632,62 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
 
   buildXhttpLink(bypassUuid) {
     const host = config.CDN_DOMAIN || 'cdn.node-ping-stat.ru';
-    const xhttpPath = encodeURIComponent((config.XHTTP_PATH || '/knight-down').replace(/\/+$/, ''));
+    const plainPath = config.XHTTP_PATH || '/api/uploadFile/';
+    const xhttpPath = encodeURIComponent(plainPath);
     const xhttpMode = config.XHTTP_MODE || 'packet-up';
-    const remark = '🇩🇪 Германия | CDN (XHTTP)';
+    const remark = '🇷🇺 LTE | Обходка';
     const extraObj = {
-      xPaddingBytes: "100-1000",
-      scMaxEachPostBytes: "100000-1000000",
-      scMinPostsIntervalMs: "10-30",
-      scMaxBufferedPosts: 30,
-      noGRPCHeader: false
+      path: plainPath,
+      xmux: {
+        cMaxLifetimeMs: 300000,
+        cMaxReuseTimes: 100,
+        maxConcurrency: "16-32",
+        maxConnections: 0
+      },
+      seqKey: "chunk_id",
+      sessionKey: "X-Upload-Token",
+      xPaddingKey: "x_padding",
+      seqPlacement: "query",
+      xPaddingHeader: "X-Client-Version",
+      xPaddingMethod: "tokenish",
+      sessionPlacement: "header",
+      uplinkHTTPMethod: "GET",
+      xPaddingObfsMode: true,
+      xPaddingPlacement: "query"
     };
     const extra = encodeURIComponent(JSON.stringify(extraObj));
-    return `vless://${bypassUuid}@${host}:443?encryption=none&type=xhttp&security=tls&sni=${host}&host=${host}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}#${remark}`;
+    return `vless://${bypassUuid}@${host}:443?encryption=none&type=xhttp&security=tls&sni=${host}&host=${host}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}&fp=edge&alpn=h2%2Chttp%2F1.1#${remark}`;
   }
 
   buildXhttpDirectLink(bypassUuid) {
     const host = this.publicHost;
     const port = 3000;
     const sni = 'sub.knight1.space';
-    const xhttpPath = encodeURIComponent('/knight-down');
+    const plainPath = '/knight-down/';
+    const xhttpPath = encodeURIComponent(plainPath);
     const xhttpMode = config.XHTTP_MODE || 'packet-up';
     const remark = '🇩🇪 Германия | Обходной (XHTTP)';
     const extraObj = {
-      xPaddingBytes: "100-1000",
-      scMaxEachPostBytes: "100000-1000000",
-      scMinPostsIntervalMs: "10-30",
-      scMaxBufferedPosts: 30,
-      noGRPCHeader: false
+      path: plainPath,
+      xmux: {
+        cMaxLifetimeMs: 300000,
+        cMaxReuseTimes: 100,
+        maxConcurrency: "16-32",
+        maxConnections: 0
+      },
+      seqKey: "chunk_id",
+      sessionKey: "X-Upload-Token",
+      xPaddingKey: "hash",
+      seqPlacement: "query",
+      xPaddingHeader: "X-Client-Version",
+      xPaddingMethod: "tokenish",
+      sessionPlacement: "header",
+      uplinkHTTPMethod: "GET",
+      xPaddingObfsMode: true,
+      xPaddingPlacement: "queryInHeader"
     };
     const extra = encodeURIComponent(JSON.stringify(extraObj));
-    return `vless://${bypassUuid}@${host}:${port}?encryption=none&type=xhttp&security=tls&sni=${sni}&host=${sni}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}#${remark}`;
+    return `vless://${bypassUuid}@${host}:${port}?encryption=none&type=xhttp&security=tls&sni=${sni}&host=${sni}&path=${xhttpPath}&mode=${xhttpMode}&extra=${extra}&fp=edge&alpn=h2%2Chttp%2F1.1#${remark}`;
   }
 
   // Get active client IPs
@@ -660,7 +699,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
     try {
       const headers = await this.getHeaders();
       const url = `${this.baseUrl}/panel/api/clients/ips/${email}`;
-      const response = await axios.post(url, {}, { headers, timeout: 5000 });
+      const response = await axios.post(url, {}, { headers, timeout: 5000, httpsAgent: xuiHttpsAgent });
 
       if (response.data && response.data.success) {
         const obj = response.data.obj;
@@ -685,7 +724,7 @@ const mockLink = `vless://${uuid}@your-server.com:443?encryption=none&type=tcp&s
     try {
       const headers = await this.getHeaders();
       const url = `${this.baseUrl}/panel/api/nodes/list`;
-      const response = await axios.get(url, { headers, timeout: 5000 });
+      const response = await axios.get(url, { headers, timeout: 5000, httpsAgent: xuiHttpsAgent });
 
       if (response.data && response.data.success) {
         return response.data.obj || [];

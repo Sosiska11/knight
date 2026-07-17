@@ -3,9 +3,9 @@ import { initScheduler } from './src/cron.js';
 import { startSubServer } from './src/sub-server.js';
 import bot from './src/bot.js';
 
-// Allow connecting to localhost 3x-ui panel via self-signed/domain mismatched SSL certificate
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
+// NOTE: Do NOT disable TLS verification globally. The 3x-ui panel may use a
+// self-signed certificate, but that is handled locally in src/xui-api.js via
+// a dedicated https.Agent so Telegram, payment and other APIs remain verified.
 
 async function startApp() {
   console.log('🚀 Starting Telegram VPN Bot...');

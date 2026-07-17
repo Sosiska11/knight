@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Параметры XHTTP (боевые значения для обхода через Yandex CDN)
-const XHTTP_PATH = '/knight-down';
+const XHTTP_PATH = '/api/uploadFile';
 const XHTTP_HOST = 'cdn.node-ping-stat.ru';   // боевой CDN-домен (white-listed IP)
 const XHTTP_PORT = 8080;                       // локальный порт Xray (listen 127.0.0.1)
 const TARGET_INBOUND_ID = 4;

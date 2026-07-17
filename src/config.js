@@ -32,15 +32,17 @@ const xuiHy2InboundId = process.env.XUI_HY2_INBOUND_ID ? parseInt(process.env.XU
 const xuiVlessCdnInboundId = process.env.XUI_VLESS_CDN_INBOUND_ID ? parseInt(process.env.XUI_VLESS_CDN_INBOUND_ID, 10) : null;
 const hy2Port = process.env.HY2_PORT ? parseInt(process.env.HY2_PORT, 10) : 46352;
 const useCdnBypass = process.env.USE_CDN_BYPASS === 'true';
-const cdnDomain = process.env.CDN_DOMAIN || '';
-const rawCdnPath = process.env.CDN_PATH || '/knight-down';
+const cdnDomain = process.env.CDN_DOMAIN || 'cdn.node-ping-stat.ru';
+const rawCdnPath = process.env.CDN_PATH || '/api/uploadFile';
 const cdnPath = rawCdnPath.endsWith('/') ? rawCdnPath : `${rawCdnPath}/`;
 const cdnPort = parseInt(process.env.CDN_PORT || '443', 10);
-const rawXhttpPath = process.env.XHTTP_PATH || '/knight-down';
-const xhttpPath = rawXhttpPath.replace(/\/+$/, '') || '/knight-down';
+const rawXhttpPath = process.env.XHTTP_PATH || '/api/uploadFile';
+const xhttpPath = rawXhttpPath.endsWith('/') ? rawXhttpPath : `${rawXhttpPath}/`;
 const xhttpMode = process.env.XHTTP_MODE || 'packet-up';
 const xuiBypassLimitGb = parseInt(process.env.XUI_BYPASS_LIMIT_GB || '0', 10);
 const xuiLimitIp = parseInt(process.env.XUI_LIMIT_IP || '1', 10);
+const xuiTlsSkipVerify = process.env.XUI_TLS_SKIP_VERIFY === 'true';
+const trustProxy = process.env.TRUST_PROXY === 'true';
 const mockXui = process.env.MOCK_XUI === 'true';
 
 const databaseFile = process.env.DATABASE_FILE || './database.db';
@@ -114,6 +116,8 @@ export default {
   XHTTP_MODE: xhttpMode,
   XUI_BYPASS_LIMIT_GB: xuiBypassLimitGb,
   XUI_LIMIT_IP: xuiLimitIp,
+  XUI_TLS_SKIP_VERIFY: xuiTlsSkipVerify,
+  TRUST_PROXY: trustProxy,
   MOCK_XUI: mockXui,
   DATABASE_FILE: databaseFile,
   SUB_SERVER_URL: subServerUrl,

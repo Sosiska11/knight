@@ -1,10 +1,10 @@
 import { Client } from 'ssh2';
 
 const config = {
-  host: '141.11.197.6',
+  host: '144.31.196.245',
   port: 22,
   username: 'root',
-  password: 'IxJlIDug5LW5mF5ghOts',
+  password: 'Kng-73_vPs!98aB',
   readyTimeout: 30000
 };
 

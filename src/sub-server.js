@@ -10,8 +10,67 @@ import { reserveNodes } from './cron.js';
 import dns from 'dns';
 import crypto from 'crypto';
 
+// Simple in-memory rate limiter (no external dependency). Tracks requests per
+// IP within a rolling time window. Cleans up stale entries every 10 minutes.
+class MemoryRateLimiter {
+  constructor({ windowMs = 15 * 60 * 1000, max = 100, message = 'Too many requests, please try again later.' }) {
+    this.windowMs = windowMs;
+    this.max = max;
+    this.message = message;
+    this.requests = new Map(); // ip -> [timestamps]
+    this.lastCleanup = Date.now();
+  }
+
+  middleware() {
+    return (req, res, next) => {
+      const now = Date.now();
+      this.cleanup(now);
+
+      const ip = req.ip || req.connection.remoteAddress || 'unknown';
+      const timestamps = this.requests.get(ip) || [];
+
+      // Remove timestamps outside the window
+      const valid = timestamps.filter(ts => now - ts < this.windowMs);
+      if (valid.length >= this.max) {
+        res.setHeader('Retry-After', Math.ceil(this.windowMs / 1000));
+        return res.status(429).send(this.message);
+      }
+
+      valid.push(now);
+      this.requests.set(ip, valid);
+      next();
+    };
+  }
+
+  cleanup(now) {
+    if (now - this.lastCleanup < 10 * 60 * 1000) return;
+    for (const [ip, timestamps] of this.requests.entries()) {
+      const valid = timestamps.filter(ts => now - ts < this.windowMs);
+      if (valid.length === 0) this.requests.delete(ip);
+      else this.requests.set(ip, valid);
+    }
+    this.lastCleanup = now;
+  }
+}
+
 const app = express();
 const PORT = config.SUB_PORT;
+
+// Trust X-Forwarded-For headers when running behind a reverse proxy (nginx,
+// Cloudflare, etc.). Enable only if the proxy strips untrusted headers,
+// otherwise clients can spoof their IP and bypass the rate limiter.
+if (config.TRUST_PROXY) {
+  app.set('trust proxy', 1);
+}
+
+// Global rate limit: 100 requests per 15 minutes per IP
+const globalLimiter = new MemoryRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 });
+app.use(globalLimiter.middleware());
+
+// Stricter limit for subscription endpoints: 60 requests per 15 minutes per IP
+const subLimiter = new MemoryRateLimiter({ windowMs: 15 * 60 * 1000, max: 60 });
+app.use('/sub/', subLimiter.middleware());
+app.use('/import/', subLimiter.middleware());
 
 app.get('/sub/:uuid', async (req, res) => {
   const { uuid } = req.params;
@@ -104,7 +163,7 @@ app.get('/sub/:uuid', async (req, res) => {
               if (node.address === '188.255.163.236' || node.address === process.env.PL_SSH_HOST) {
                 continue;
               }
-              const isStaticNode = node.address === '194.50.94.46' || node.address === '31.76.46.20' || node.address === process.env.NL_SSH_HOST || node.address === process.env.FI_SSH_HOST;
+              const isStaticNode = node.address === '194.50.94.46' || node.address === '31.76.46.20' || node.address === '188.255.163.236' || node.address === process.env.NL_SSH_HOST || node.address === process.env.FI_SSH_HOST || node.address === process.env.PL_SSH_HOST;
               if (!isStaticNode && xuiApi.isNodeOffline(node.address)) {
                 continue;
               }
@@ -137,8 +196,7 @@ app.get('/sub/:uuid', async (req, res) => {
     }
 
 
-    // Bypass configurations (XHTTP Direct and CDN) - Disabled because direct TCP is blocked by ISP and custom ports are blocked by host DDoS filter
-    /*
+    // Bypass configurations (VLESS XHTTP over CDN for LTE/4G whitelist bypass)
     if (!testMode || testMode === 'ru') {
       let bypassUuid = null;
       if (sub.bypass_connection_url) {
@@ -151,16 +209,11 @@ app.get('/sub/:uuid', async (req, res) => {
       }
 
       if (bypassUuid) {
-        // Direct Germany VLESS XHTTP over Port 3000 (Low-latency)
-        const directBypassUrl = xuiApi.buildXhttpDirectLink(bypassUuid);
-        configsText += directBypassUrl + '\n';
-
-        // CDN Germany VLESS XHTTP over Port 443 (Unblockable backup)
+        // CDN Germany VLESS XHTTP over Port 443 (Unblockable bypass)
         const bypassUrl = xuiApi.buildXhttpLink(bypassUuid);
         configsText += bypassUrl + '\n';
       }
     }
-    */
 
     // Add reserve nodes from goida-vpn-configs
     if (!testMode || testMode === 'de' || testMode === 'ru') {
@@ -215,12 +268,59 @@ app.get('/sub/:uuid', async (req, res) => {
   }
 });
 
+// Allowed redirect targets. Blocks open-redirect phishing/abuse.
+const ALLOWED_REDIRECT_SCHEMES = new Set(['happ', 'happ-proxy', 'happ-proxy-utility', 'incy']);
+const ALLOWED_REDIRECT_HOSTS = new Set([
+  'crypto.happ.su',
+  'apps.apple.com',
+  'play.google.com',
+  'github.com'
+]);
+
+function isRedirectAllowed(url) {
+  if (typeof url !== 'string' || url.length > 2048) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+
+  // Allow known app deep-link schemes (used by the import wizard)
+  if (ALLOWED_REDIRECT_SCHEMES.has(parsed.protocol.replace(':', ''))) {
+    return true;
+  }
+
+  // Only https is allowed for web URLs
+  if (parsed.protocol !== 'https:') return false;
+
+  // Reject URLs with credentials, IP literals and unusual characters
+  if (parsed.username || parsed.password) return false;
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(parsed.hostname)) return false;
+  if (/[\s\x00-\x1f\x7f]/.test(url)) return false;
+
+  // Allow exact hosts or subdomains of trusted hosts
+  const hostname = parsed.hostname.toLowerCase();
+  if (ALLOWED_REDIRECT_HOSTS.has(hostname)) return true;
+  for (const allowed of ALLOWED_REDIRECT_HOSTS) {
+    if (hostname === allowed || hostname.endsWith('.' + allowed)) return true;
+  }
+
+  return false;
+}
+
 app.get('/redirect', (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) {
     return res.status(400).send('Missing url parameter');
   }
-  
+
+  if (!isRedirectAllowed(targetUrl)) {
+    console.warn(`🚫 Blocked disallowed redirect attempt to: ${String(targetUrl).substring(0, 200)}`);
+    return res.status(400).send('Invalid or disallowed redirect URL.');
+  }
+
   res.send(`
 <!DOCTYPE html>
 <html>
