@@ -446,4 +446,30 @@ export async function getSupportMessageMapping(adminMsgId) {
   }
 }
 
+export function getXuiTraffic(email) {
+  return new Promise((resolve) => {
+    const xuiDbPath = '/etc/x-ui/x-ui.db';
+    const xuiDb = new sqlite3.Database(xuiDbPath, sqlite3.OPEN_READONLY, (err) => {
+      if (err) {
+        resolve({ up: 0, down: 0 });
+        return;
+      }
+    });
+
+    const query = 'SELECT SUM(up) as total_up, SUM(down) as total_down FROM client_traffics WHERE email LIKE ?';
+    xuiDb.get(query, [`${email}%`], (err, row) => {
+      xuiDb.close();
+      if (err || !row) {
+        resolve({ up: 0, down: 0 });
+      } else {
+        resolve({
+          up: row.total_up || 0,
+          down: row.total_down || 0
+        });
+      }
+    });
+  });
+}
+
+
 

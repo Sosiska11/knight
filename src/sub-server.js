@@ -95,6 +95,21 @@ app.get('/sub/:uuid', async (req, res) => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     const daysLeft = diffDays > 0 ? diffDays : 0;
 
+    // Fetch traffic statistics from 3x-ui database
+    let uploadBytes = 0;
+    let downloadBytes = 0;
+    try {
+      const traffic = await db.getXuiTraffic(sub.client_email);
+      uploadBytes = traffic.up || 0;
+      downloadBytes = traffic.down || 0;
+    } catch (err) {
+      console.error('⚠️ Error fetching client traffic stats:', err.message);
+    }
+
+    // Determine total limit based on plan (trial = 50 GB, paid/normal = 1024 GB)
+    const isTrial = sub.plan_name && (sub.plan_name.toLowerCase().includes('пробный') || sub.plan_name.toLowerCase().includes('trial'));
+    const totalBytes = isTrial ? 50 * 1024 * 1024 * 1024 : 1024 * 1024 * 1024 * 1024;
+
     const botUsername = bot.botInfo?.username || 'knightvpn_rbot';
     const noticeText = `🛡️ Подписка активна (осталось ${daysLeft} дн.)
 👤 ID пользователя: ${sub.tg_id || ''}
@@ -118,10 +133,10 @@ app.get('/sub/:uuid', async (req, res) => {
     res.setHeader('support-url', `https://t.me/${botUsername}`);
     res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''KnightVPN");
     
-    // Shows traffic usage (1 TB total) and expiration date inside Hiddify
+    // Shows traffic usage and expiration date inside Hiddify
     res.setHeader(
       'subscription-userinfo',
-      `upload=0; download=0; total=1099511627776; expire=${expireTimestamp}`
+      `upload=${uploadBytes}; download=${downloadBytes}; total=${totalBytes}; expire=${expireTimestamp}`
     );
 
     const testMode = req.query.test || ''; // 'main', 'de', 'ru', 'clean' or empty
