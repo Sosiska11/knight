@@ -45,8 +45,11 @@ function sanitizeVlessUrl(vlessUrl) {
     ];
 
     for (const key of allowedKeys) {
-      const value = params.get(key);
+      let value = params.get(key);
       if (value !== null && value !== '') {
+        if (key === 'type' && value === 'raw') {
+          value = 'tcp';
+        }
         cleanParams.set(key, value);
       }
     }
@@ -562,9 +565,8 @@ async function verifySingleNode(line, forceRuCountry = false) {
   }
 }
 
-// Function to fetch reserve nodes from goida-vpn-configs
 export async function fetchReserveNodes() {
-  console.log('⏰ Fetching reserve public nodes from goida-vpn-configs...');
+  console.log('⏰ Fetching reserve public nodes from goida-vpn-configs, zieng2/wl, igareck, ByeWhiteLists2, nowmeow, and EtoNeYaProject...');
   try {
     const urls = [
       'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/1.txt',
@@ -572,7 +574,12 @@ export async function fetchReserveNodes() {
       'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/6.txt',
       'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/9.txt',
       'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/14.txt',
-      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/26.txt'
+      'https://fastly.jsdelivr.net/gh/AvenCores/goida-vpn-configs@main/githubmirror/26.txt',
+      'https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt',
+      'https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt',
+      'https://raw.githubusercontent.com/ByeWhiteLists/ByeWhiteLists2/refs/heads/main/ByeWhiteLists2.txt',
+      'https://nowmeow.pw/8ybBd3fdCAQ6Ew5H0d66Y1hMbh63GpKUtEXQClIu/whitelist',
+      'https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/1'
     ];
 
     const SUPPORTED_COUNTRIES = [
@@ -598,9 +605,16 @@ export async function fetchReserveNodes() {
 
         let lines = text.split('\n').map(l => l.trim()).filter(Boolean);
         const isBypassList = url.includes('26.txt');
+        const isUniversalList = url.includes('vless_universal.txt') || 
+                                url.includes('Vless-Reality-White-Lists-Rus-Mobile.txt') ||
+                                url.includes('ByeWhiteLists2.txt') ||
+                                url.includes('whitelist') ||
+                                url.includes('etoneyaproject') ||
+                                url.endsWith('/1');
+        const isBypassOrUniversal = isBypassList || isUniversalList;
 
-        // Optimize: bypass list is huge, limit it to 400 candidates to prevent long check runs
-        if (isBypassList) {
+        // Optimize: bypass/universal list is huge, limit it to 400 candidates to prevent long check runs
+        if (isBypassOrUniversal) {
           shuffleArray(lines);
           lines = lines.slice(0, 400);
         }
@@ -615,16 +629,16 @@ export async function fetchReserveNodes() {
 
           const cleanLine = sanitizeVlessUrl(line);
 
-          // Ensure the config is valid and secure
-          if (!isValidConfig(cleanLine, isBypassList)) {
+          // Ensure the config is valid and secure (bypass lists only check offensive SNIs)
+          if (!isValidConfig(cleanLine, isBypassOrUniversal)) {
             continue;
           }
 
-          // EXCLUSIVELY use type=grpc (allow tcp/ws for bypass list)
+          // EXCLUSIVELY use type=grpc (allow tcp/ws/xhttp for bypass/universal lists)
           try {
             const urlObj = new URL(cleanLine);
             const type = urlObj.searchParams.get('type');
-            if (type !== 'grpc' && !(isBypassList && (type === 'tcp' || type === 'ws' || !type))) {
+            if (type !== 'grpc' && !(isBypassOrUniversal && (type === 'tcp' || type === 'ws' || type === 'xhttp' || !type))) {
               continue;
             }
           } catch (e) {
@@ -680,6 +694,16 @@ export async function fetchReserveNodes() {
       return PRIORITY_SNIS.some(p => sni === p || sni.endsWith('.' + p));
     }
 
+    function isRobustTransport(url) {
+      try {
+        const urlObj = new URL(url);
+        const type = urlObj.searchParams.get('type');
+        return type === 'grpc' || type === 'ws' || type === 'xhttp';
+      } catch (e) {
+        return false;
+      }
+    }
+
     // Deduplicate queues by host:port
     function uniqNodes(lines) {
       const seen = new Set();
@@ -696,8 +720,17 @@ export async function fetchReserveNodes() {
     const uniqueQueues = {};
     for (const country of SUPPORTED_COUNTRIES) {
       const list = candidates[country.code];
-      const priority = list.filter(c => isPriorityNode(c));
-      const regular = list.filter(c => !isPriorityNode(c));
+      let priority, regular;
+
+      if (country.code === 'RU') {
+        // Prioritize WS/gRPC/XHTTP transport types for Russia to bypass XTLS-Reality DPI blocks
+        priority = list.filter(c => isRobustTransport(c) || isPriorityNode(c));
+        regular = list.filter(c => !isRobustTransport(c) && !isPriorityNode(c));
+      } else {
+        priority = list.filter(c => isPriorityNode(c));
+        regular = list.filter(c => !isPriorityNode(c));
+      }
+
       shuffleArray(priority);
       shuffleArray(regular);
       uniqueQueues[country.code] = uniqNodes([...priority, ...regular]);
@@ -705,9 +738,8 @@ export async function fetchReserveNodes() {
 
     const verifiedNodes = [];
 
-    // Helper to process a queue in chunks of concurrent promises
     async function processQueueInChunks(queue, limit, targetArray, countryCode) {
-      const maxNodes = countryCode === 'RU' ? 6 : 3;
+      const maxNodes = countryCode === 'RU' ? 10 : 3;
       let index = 0;
       while (targetArray.length < maxNodes && index < queue.length) {
         const chunk = queue.slice(index, index + limit);

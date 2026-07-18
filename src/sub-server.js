@@ -9,6 +9,7 @@ import xuiApi from './xui-api.js';
 import { reserveNodes } from './cron.js';
 import dns from 'dns';
 import crypto from 'crypto';
+import bot from './bot.js';
 
 // Simple in-memory rate limiter (no external dependency). Tracks requests per
 // IP within a rolling time window. Cleans up stale entries every 10 minutes.
@@ -94,8 +95,15 @@ app.get('/sub/:uuid', async (req, res) => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     const daysLeft = diffDays > 0 ? diffDays : 0;
 
-    const supportLink = 't.me/knightvpn_help';
-    const noticeText = `⚔️ Personal Knight VPN, sup - ${supportLink}\\nSubscription: ${daysLeft} days\\n\\n⚠️ Резервный профиль (LTE) имеет лимит 15 ГБ. \\n🚫 Торренты строго запрещены! \\n🆘 Поддержка: @knightvpn_help`;
+    const botUsername = bot.botInfo?.username || 'knightvpn_rbot';
+    const noticeText = `🛡️ Подписка активна (осталось ${daysLeft} дн.)
+👤 ID пользователя: ${sub.tg_id || ''}
+🚫 Торренты строго запрещены!
+⚠️ Не все сервера обхода рабочие.
+⚡ Нажмите кнопку пинга (справа от 🔄), чтобы найти рабочий.`;
+
+    const base64Title = 'base64:' + Buffer.from('⚔️ Knight VPN').toString('base64');
+    const base64Notice = 'base64:' + Buffer.from(noticeText).toString('base64');
 
     // Set Headers for Hiddify, Shadowrocket, Sing-box, etc.
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -103,10 +111,11 @@ app.get('/sub/:uuid', async (req, res) => {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('profile-update-interval', '1');
-    // Encode unicode emoji safely for Node.js headers using binary/latin1 encoding
-    res.setHeader('profile-title', Buffer.from('⚔️ Knight VPN').toString('binary'));
-    res.setHeader('profile-notice', Buffer.from(noticeText).toString('binary'));
-    res.setHeader('profile-web-page-url', 'https://t.me/knightvpn_help');
+    res.setHeader('profile-title', base64Title);
+    res.setHeader('profile-notice', base64Notice);
+    res.setHeader('announce', base64Notice);
+    res.setHeader('profile-web-page-url', `https://t.me/${botUsername}`);
+    res.setHeader('support-url', `https://t.me/${botUsername}`);
     res.setHeader('Content-Disposition', "attachment; filename*=UTF-8''KnightVPN");
     
     // Shows traffic usage (1 TB total) and expiration date inside Hiddify
@@ -197,7 +206,7 @@ app.get('/sub/:uuid', async (req, res) => {
 
 
     // Bypass configurations (VLESS XHTTP over CDN for LTE/4G whitelist bypass)
-    if (!testMode || testMode === 'ru') {
+    if (config.ENABLE_LTE_BYPASS && (!testMode || testMode === 'ru')) {
       let bypassUuid = null;
       if (sub.bypass_connection_url) {
         const uuidMatch = sub.bypass_connection_url.match(/vless:\/\/([^@]+)@/);
@@ -1062,6 +1071,9 @@ app.get('/import/:uuid?', async (req, res) => {
             // 2. Step 2: Import Key / Subscribe
             let step2Html = '';
             if (hasSub) {
+                const warningMsg = config.ENABLE_LTE_BYPASS
+                    ? 'На резервном обходном ключе (для LTE) установлен лимит 15 ГБ. Использование торрентов строго запрещено!'
+                    : 'Использование торрентов строго запрещено!';
                 step2Html = 
                     '<div class="step-item active">' +
                         '<div class="step-number">2</div>' +
@@ -1071,7 +1083,7 @@ app.get('/import/:uuid?', async (req, res) => {
                         '<button onclick="copySubUrl()" class="btn-action-outline btn-secondary-action">📋 Скопировать ссылку вручную</button>' +
                         '<div class="warning-box">' +
                             '<div class="warning-title">⚠️ Обратите внимание:</div>' +
-                            'На резервном обходном ключе (для LTE) установлен лимит 15 ГБ. Использование торрентов строго запрещено!' +
+                            warningMsg +
                         '</div>' +
                     '</div>';
             } else {

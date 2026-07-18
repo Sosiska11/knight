@@ -32,6 +32,7 @@ const xuiHy2InboundId = process.env.XUI_HY2_INBOUND_ID ? parseInt(process.env.XU
 const xuiVlessCdnInboundId = process.env.XUI_VLESS_CDN_INBOUND_ID ? parseInt(process.env.XUI_VLESS_CDN_INBOUND_ID, 10) : null;
 const hy2Port = process.env.HY2_PORT ? parseInt(process.env.HY2_PORT, 10) : 46352;
 const useCdnBypass = process.env.USE_CDN_BYPASS === 'true';
+const enableLteBypass = process.env.ENABLE_LTE_BYPASS === 'true';
 const cdnDomain = process.env.CDN_DOMAIN || 'cdn.node-ping-stat.ru';
 const rawCdnPath = process.env.CDN_PATH || '/api/uploadFile';
 const cdnPath = rawCdnPath.endsWith('/') ? rawCdnPath : `${rawCdnPath}/`;
@@ -109,6 +110,7 @@ export default {
   XUI_VLESS_CDN_INBOUND_ID: xuiVlessCdnInboundId,
   HY2_PORT: hy2Port,
   USE_CDN_BYPASS: useCdnBypass,
+  ENABLE_LTE_BYPASS: enableLteBypass,
   CDN_DOMAIN: cdnDomain,
   CDN_PATH: cdnPath,
   CDN_PORT: cdnPort,

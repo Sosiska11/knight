@@ -609,6 +609,10 @@ bot.action('get_key', async (ctx) => {
 
   await ctx.answerCbQuery();
   
+  const warningMsg = config.ENABLE_LTE_BYPASS
+    ? '⚠️ <b>Внимание:</b> На резервном обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов на обходном профиле строго запрещено!'
+    : '⚠️ <b>Внимание:</b> Использование торрентов строго запрещено!';
+
   const keyText = `🔑 <b>Ваша персональная ссылка для подписки:</b>
 <code>${config.SUB_SERVER_URL}/sub/${activeSub.client_uuid}</code>
 
@@ -621,7 +625,7 @@ bot.action('get_key', async (ctx) => {
 4. Выберите <b>«Добавить из буфера обмена»</b>
 5. Нажмите кнопку подключения в центре экрана
 
-⚠️ <b>Внимание:</b> На резервном обходном ключе установлен лимит трафика 15 ГБ. Использование торрентов на обходном профиле строго запрещено!`;
+${warningMsg}`;
 
   const autoImportRedirectUrl = `${config.SUB_SERVER_URL}/import/${activeSub.client_uuid}`;
   const keyboard = {
